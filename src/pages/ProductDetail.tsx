@@ -8,7 +8,7 @@ const ProductDetail = () => {
 
   // 🔧 En una versión real, esto vendría de una API o base de datos
   const products = [
-    { id: 1, title: "Artículo 1", price: 50, description: "Descripción del producto 1", image: "https://via.placeholder.com/400" },
+    { id: 1, title: "Articulo 1", price: 50, description: "Descripción del producto 1", image: "https://via.placeholder.com/400" },
     { id: 2, title: "Artículo 2", price: 75, description: "Descripción del producto 2", image: "https://via.placeholder.com/400" },
     { id: 3, title: "Artículo 3", price: 100, description: "Descripción del producto 3", image: "https://via.placeholder.com/400" },
   ];
