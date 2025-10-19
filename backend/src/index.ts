@@ -26,5 +26,5 @@ app.use("/productos", productos);
   catch (e) { console.error("❌ MySQL ERROR", e); }
 })();
 
-const port = Number(process.env.PORT || 8000);
+const port = Number(process.env.PORT || 4000);
 app.listen(port, () => console.log(`API http://localhost:${port}`));
