@@ -16,14 +16,19 @@ const Index = () => {
     { id: 6, title: "Artículo 6", price: 0 },
   ];
 
-  const filters = ["Todos", "Más vendidos", "Más recientes", "Mejor precio"];
+  const filters = [
+    { label: "New", active: true },
+    { label: "Price ascending", active: false },
+    { label: "Price descending", active: false },
+    { label: "Rating", active: false },
+  ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
+    <div className="min-h-screen bg-background">
       <Navbar />
       
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex flex-col lg:flex-row gap-8">
+      <main className="container mx-auto px-6 py-6">
+        <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar */}
           <div className="lg:block hidden">
             <CategorySidebar />
@@ -33,29 +38,33 @@ const Index = () => {
           <div className="flex-1">
             {/* Search Bar */}
             <div className="mb-6">
-              <div className="relative">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+              <div className="relative mb-4">
                 <Input
                   type="search"
-                  placeholder="Buscar productos..."
-                  className="pl-12 py-6 bg-card border-border rounded-xl shadow-sm"
+                  placeholder="Search"
+                  className="pl-10 bg-card border-border h-10 text-sm"
                 />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
               </div>
-              <div className="flex flex-wrap gap-2 mt-4">
+              <div className="flex flex-wrap gap-2">
                 {filters.map((filter, idx) => (
                   <Badge
                     key={idx}
-                    variant={idx === 0 ? "default" : "outline"}
-                    className={idx === 0 ? "bg-primary text-white hover:bg-primary/90 cursor-pointer" : "cursor-pointer hover:bg-secondary"}
+                    variant={filter.active ? "default" : "outline"}
+                    className={
+                      filter.active
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer px-4 py-1.5"
+                        : "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer px-4 py-1.5 border-border"
+                    }
                   >
-                    {filter}
+                    {filter.label}
                   </Badge>
                 ))}
               </div>
             </div>
 
             {/* Products Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {products.map((product) => (
                 <ProductCard
                   key={product.id}
