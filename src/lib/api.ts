@@ -1,4 +1,4 @@
-const API = "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 export async function api(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem("token");
   const headers = { "Content-Type":"application/json", ...(token? { Authorization:`Bearer ${token}` }:{}) };
