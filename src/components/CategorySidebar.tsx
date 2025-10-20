@@ -7,8 +7,8 @@ const CategorySidebar = () => {
   const [priceRange, setPriceRange] = useState([0, 100]);
 
   const categories = [
-    { id: "cat1", label: "Categoría 1", checked: true },
-    { id: "cat2", label: "Categoría 2", checked: true },
+    { id: "cat1", label: "Producto", checked: true },
+    { id: "cat2", label: "Servicio", checked: true },
     { id: "cat3", label: "Categoría 3", checked: true },
   ];
 
