@@ -3,7 +3,7 @@ import { pool } from "../db.js";
 import type { RowDataPacket } from "mysql2";
 
 type ProductoRow = RowDataPacket & {
-  id: string; nombre: string; descripcion: string; precio: number; ubicacion: string; categoria: string;
+  id: string; nombre: string; descripcion: string; precio: number; ubicacion: string; categoria: string; urlFoto: string | null;
 };
 type CountRow = RowDataPacket & { total: number };
 
@@ -28,9 +28,10 @@ r.get("/", async (req: Request, res: Response) => {
 
   const [items] = await pool.query<ProductoRow[]>(
     `SELECT PUBLICACIONES.id, PUBLICACIONES.nombre, PUBLICACIONES.descripcion, PUBLICACIONES.precio,
-            PUBLICACIONES.ubicacion, CATEGORIAS.nombre AS categoria
+            PUBLICACIONES.ubicacion, CATEGORIAS.nombre AS categoria, f.urlFoto
      FROM PUBLICACIONES
      JOIN CATEGORIAS ON CATEGORIAS.id = PUBLICACIONES.categoriaId
+     LEFT JOIN fotos_publicacion f ON f.publicacionId = PUBLICACIONES.id AND f.orden = 1
      ${whereSql}
      ORDER BY PUBLICACIONES.fechaPublicacion DESC
      LIMIT ? OFFSET ?`,

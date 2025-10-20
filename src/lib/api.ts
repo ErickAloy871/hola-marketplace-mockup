@@ -1,4 +1,5 @@
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
 export async function api(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem("token");
   const headers = { "Content-Type":"application/json", ...(token? { Authorization:`Bearer ${token}` }:{}) };
@@ -6,3 +7,30 @@ export async function api(path: string, opts: RequestInit = {}) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+// Funciones específicas para la API
+export const authApi = {
+  login: async (correo: string, password: string) => {
+    return api("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ correo, password })
+    });
+  },
+  
+  me: async () => {
+    return api("/auth/me");
+  }
+};
+
+export const productosApi = {
+  getAll: async (params?: { q?: string; categoria?: string; minPrecio?: number; maxPrecio?: number; page?: number; pageSize?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) searchParams.append(key, value.toString());
+      });
+    }
+    const query = searchParams.toString();
+    return api(`/productos${query ? `?${query}` : ""}`);
+  }
+};

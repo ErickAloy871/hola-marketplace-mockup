@@ -10,5 +10,11 @@ const secret = process.env.JWT_SECRET!;
 export const sign = (payload: JWTPayload) =>
   jwt.sign(payload, secret, { expiresIn: "2d" });
 
-export const verifyJwt = (token: string): JWTPayload =>
-  jwt.verify(token, secret) as JWTPayload;
+export const verifyJwt = (token: string): JWTPayload => {
+  try {
+    return jwt.verify(token, secret) as JWTPayload;
+  } catch (error) {
+    console.error("JWT verification error:", error);
+    throw new Error("Invalid token");
+  }
+};

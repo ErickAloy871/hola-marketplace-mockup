@@ -29,22 +29,30 @@ r.post("/login", async (req: Request, res: Response) => {
   if (!ok) return res.status(401).json({ message: "Credenciales inválidas" });
 
   const token = sign({ sub: user.id, rol: user.rolId });
-  await pool.query("UPDATE USUARIOS SET ultimoLogin=NOW() WHERE id=?", [user.id]);
+  // removed ultimoLogin update for compatibility with current schema
 
   res.json({ token, user: { id: user.id, nombre: user.nombre, apellido: user.apellido, correo: user.correo } });
 });
 
 r.get("/me", async (req: Request, res: Response) => {
   try {
-    const token = (req.headers.authorization || "").replace("Bearer ", "");
+    const authHeader = req.headers.authorization || "";
+    console.log("Auth header:", authHeader);
+    
+    const token = authHeader.replace("Bearer ", "");
+    console.log("Token:", token.substring(0, 20) + "...");
+    
     const payload = verifyJwt(token) as JWTPayload;
+    console.log("Payload:", payload);
 
     const [rows] = await pool.query<(RowDataPacket & { id: string; nombre: string; apellido: string; correo: string })[]>(
       "SELECT id, nombre, apellido, correo FROM USUARIOS WHERE id=? LIMIT 1",
       [payload.sub]
     );
+    console.log("User found:", rows[0]);
     res.json(rows[0] ?? null);
-  } catch {
+  } catch (error) {
+    console.error("Auth error:", error);
     res.status(401).json({ message: "No autorizado" });
   }
 });

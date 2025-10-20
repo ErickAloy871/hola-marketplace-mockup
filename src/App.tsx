@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ProductDetail from "./pages/ProductDetail";
 import { TooltipProvider } from "@/components/ui/tooltip"; // si lo usas
@@ -11,6 +12,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/auth" element={<Auth />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/product/:id" element={<ProductDetail />} /> 
         <Route path="*" element={<NotFound />} />
       </Routes>
