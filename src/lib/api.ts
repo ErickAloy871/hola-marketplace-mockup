@@ -32,5 +32,9 @@ export const productosApi = {
     }
     const query = searchParams.toString();
     return api(`/productos${query ? `?${query}` : ""}`);
+  },
+  
+  getById: async (id: string) => {
+    return api(`/productos/${id}`);
   }
 };

@@ -2,14 +2,22 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
+import path from "path";
+import { fileURLToPath } from "url";
 import { pool } from "./db.js";
 import auth from "./routes/auth.js";
 import productos from "./routes/productos.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
+
+// Servir archivos estáticos desde la carpeta uploads
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/health/db", async (_req, res) => {
   try {
