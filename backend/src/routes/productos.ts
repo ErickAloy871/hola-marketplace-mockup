@@ -90,7 +90,8 @@ r.get("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    const [rows] = await pool.query<ProductoRow[]>(
+    // Obtener información básica del producto
+    const [productRows] = await pool.query<ProductoRow[]>(
       `SELECT PUBLICACIONES.id, PUBLICACIONES.nombre, PUBLICACIONES.descripcion, PUBLICACIONES.precio,
               PUBLICACIONES.ubicacion, CATEGORIAS.nombre AS categoria, f.urlFoto
        FROM PUBLICACIONES
@@ -102,11 +103,28 @@ r.get("/:id", async (req: Request, res: Response) => {
       [id]
     );
 
-    if (rows.length === 0) {
+    if (productRows.length === 0) {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
 
-    res.json(rows[0]);
+    // Obtener todas las imágenes del producto
+    const [imageRows] = await pool.query<RowDataPacket[]>(
+      `SELECT urlFoto, orden FROM fotos_publicacion 
+       WHERE publicacionId = ? 
+       ORDER BY orden ASC`,
+      [id]
+    );
+
+    const product = productRows[0];
+    const imagenes = imageRows.map(row => row.urlFoto);
+
+    // Agregar las imágenes al producto
+    const productWithImages = {
+      ...product,
+      imagenes: imagenes.length > 0 ? imagenes : (product.urlFoto ? [product.urlFoto] : [])
+    };
+
+    res.json(productWithImages);
   } catch (err) {
     console.error("Error al obtener producto:", err);
     res.status(500).json({ message: "Error interno del servidor" });

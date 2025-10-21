@@ -6,13 +6,21 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { authApi } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+  const [registerNombre, setRegisterNombre] = useState("");
+  const [registerApellido, setRegisterApellido] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
+  const [registerTelefono, setRegisterTelefono] = useState("");
+  const [registerDireccion, setRegisterDireccion] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,24 +28,53 @@ const Auth = () => {
     navigate("/");
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("¡Registro exitoso!");
-    navigate("/");
+    setLoading(true);
+    
+    try {
+      // Validar que todos los campos estén completos
+      if (!registerNombre || !registerApellido || !registerEmail || !registerPassword || !registerTelefono || !registerDireccion) {
+        toast.error("Por favor, completa todos los campos");
+        return;
+      }
+      
+      // Llamar a la API de registro
+      const response = await authApi.register(
+        registerNombre,
+        registerApellido,
+        registerEmail,
+        registerPassword,
+        registerTelefono,
+        registerDireccion
+      );
+      
+      // Usar el hook de autenticación para guardar el token y usuario
+      login(response.token, response.user);
+      
+      toast.success("¡Registro exitoso!");
+      navigate("/");
+    } catch (error) {
+      console.error("Error en registro:", error);
+      toast.error("Error al registrarse. Verifica tus datos.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background flex items-center justify-center p-4 relative">
+      {/* Back Button */}
+      <Button
+        variant="ghost"
+        onClick={() => navigate("/")}
+        className="absolute top-4 left-4 text-foreground hover:text-primary z-10"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Volver a la página principal
+      </Button>
+      
       <div className="w-full max-w-md">
-        {/* Back Button */}
-        <Button
-          variant="ghost"
-          onClick={() => navigate("/")}
-          className="mb-6 text-foreground hover:text-primary"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Volver a la página principal
-        </Button>
 
         {/* Header */}
         <div className="text-center mb-8">
@@ -110,7 +147,38 @@ const Auth = () => {
             </TabsContent>
 
             <TabsContent value="register">
-              <form onSubmit={handleRegister} className="space-y-6">
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="register-nombre" className="text-foreground font-semibold">
+                      Nombre
+                    </Label>
+                    <Input
+                      id="register-nombre"
+                      type="text"
+                      placeholder="Tu nombre"
+                      value={registerNombre}
+                      onChange={(e) => setRegisterNombre(e.target.value)}
+                      className="border-2 border-border focus:border-primary"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="register-apellido" className="text-foreground font-semibold">
+                      Apellido
+                    </Label>
+                    <Input
+                      id="register-apellido"
+                      type="text"
+                      placeholder="Tu apellido"
+                      value={registerApellido}
+                      onChange={(e) => setRegisterApellido(e.target.value)}
+                      className="border-2 border-border focus:border-primary"
+                      required
+                    />
+                  </div>
+                </div>
+                
                 <div className="space-y-2">
                   <Label htmlFor="register-email" className="text-foreground font-semibold">
                     Correo electrónico
@@ -125,6 +193,7 @@ const Auth = () => {
                     required
                   />
                 </div>
+                
                 <div className="space-y-2">
                   <Label htmlFor="register-password" className="text-foreground font-semibold">
                     Contraseña
@@ -139,11 +208,43 @@ const Auth = () => {
                     required
                   />
                 </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="register-telefono" className="text-foreground font-semibold">
+                    Teléfono
+                  </Label>
+                  <Input
+                    id="register-telefono"
+                    type="tel"
+                    placeholder="0991234567"
+                    value={registerTelefono}
+                    onChange={(e) => setRegisterTelefono(e.target.value)}
+                    className="border-2 border-border focus:border-primary"
+                    required
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="register-direccion" className="text-foreground font-semibold">
+                    Dirección
+                  </Label>
+                  <Input
+                    id="register-direccion"
+                    type="text"
+                    placeholder="Tu dirección completa"
+                    value={registerDireccion}
+                    onChange={(e) => setRegisterDireccion(e.target.value)}
+                    className="border-2 border-border focus:border-primary"
+                    required
+                  />
+                </div>
+                
                 <Button
                   type="submit"
                   className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-6 rounded-lg shadow-sm"
+                  disabled={loading}
                 >
-                  Registrarse
+                  {loading ? "Registrando..." : "Registrarse"}
                 </Button>
               </form>
             </TabsContent>

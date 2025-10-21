@@ -22,8 +22,12 @@ const Footer = () => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div>
-            <div className="w-12 h-12 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center mb-4 shadow-sm">
-              <span className="text-2xl">🛒</span>
+            <div className="mb-4">
+              <img 
+                src="/logo.png" 
+                alt="Logo de la marca" 
+                className="w-16 h-16 object-contain"
+              />
             </div>
             <div className="flex gap-3 mt-6">
               <a href="#" className="w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center hover:bg-primary hover:text-white transition-colors">

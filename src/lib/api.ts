@@ -17,6 +17,13 @@ export const authApi = {
     });
   },
   
+  register: async (nombre: string, apellido: string, correo: string, password: string, telefono: string, direccion: string) => {
+    return api("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ nombre, apellido, correo, password, telefono, direccion })
+    });
+  },
+  
   me: async () => {
     return api("/auth/me");
   }

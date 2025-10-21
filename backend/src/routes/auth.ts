@@ -34,6 +34,49 @@ r.post("/login", async (req: Request, res: Response) => {
   res.json({ token, user: { id: user.id, nombre: user.nombre, apellido: user.apellido, correo: user.correo } });
 });
 
+r.post("/register", async (req: Request, res: Response) => {
+  try {
+    const { nombre, apellido, correo, password, telefono, direccion } = req.body as {
+      nombre: string; apellido: string; correo: string; password: string;
+      telefono: string; direccion: string;
+    };
+
+    // Verificar si el usuario ya existe
+    const [existingUsers] = await pool.query<UserRow[]>(
+      "SELECT id FROM USUARIOS WHERE correo=? LIMIT 1",
+      [correo]
+    );
+    
+    if (existingUsers.length > 0) {
+      return res.status(400).json({ message: "El correo ya está registrado" });
+    }
+
+    // Hash de la contraseña
+    const saltRounds = 10;
+    const passwordHash = await bcrypt.hash(password, saltRounds);
+
+    // Insertar nuevo usuario
+    const [result] = await pool.query(
+      "INSERT INTO USUARIOS (nombre, apellido, correo, passwordHash, telefono, direccion, rolId) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [nombre, apellido, correo, passwordHash, telefono, direccion, "2"] // rolId 2 = comprador por defecto
+    );
+
+    const insertResult = result as any;
+    const userId = insertResult.insertId;
+
+    // Generar token
+    const token = sign({ sub: userId.toString(), rol: "2" });
+
+    res.status(201).json({
+      token,
+      user: { id: userId, nombre, apellido, correo }
+    });
+  } catch (error) {
+    console.error("Register error:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
 r.get("/me", async (req: Request, res: Response) => {
   try {
     const authHeader = req.headers.authorization || "";

@@ -12,8 +12,10 @@ const ImageGallery = ({ images, alt }: ImageGalleryProps) => {
 
   if (!images || images.length === 0) {
     return (
-      <div className="w-full max-w-md h-96 bg-muted rounded-lg shadow-md mx-auto flex items-center justify-center">
-        <div className="text-muted-foreground">Sin imagen</div>
+      <div className="w-full max-w-lg mx-auto">
+        <div className="h-96 bg-muted rounded-lg shadow-md flex items-center justify-center">
+          <div className="text-muted-foreground">Sin imagen</div>
+        </div>
       </div>
     );
   }
@@ -35,13 +37,13 @@ const ImageGallery = ({ images, alt }: ImageGalleryProps) => {
   };
 
   return (
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full max-w-lg mx-auto">
       {/* Imagen principal */}
-      <div className="relative">
+      <div className="relative flex justify-center">
         <img
           src={images[currentIndex]}
           alt={`${alt} - Imagen ${currentIndex + 1}`}
-          className="w-full h-96 object-cover rounded-lg shadow-md"
+          className="max-w-full h-auto max-h-96 object-contain rounded-lg shadow-md"
         />
         
         {/* Navegación solo si hay más de una imagen */}

@@ -11,7 +11,7 @@ import { Toaster } from "@/components/ui/sonner"; // o desde "sonner"
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById("root")!).render(
-  <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <App />
