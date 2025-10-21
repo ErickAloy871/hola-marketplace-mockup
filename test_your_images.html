@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Tus Imágenes - Marketplace</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-test {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .image-test img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+        }
+        .url {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🖼️ Test de Tus Imágenes</h1>
+        <p>Esta página verifica que tus imágenes se estén sirviendo correctamente desde el backend.</p>
+        <p><strong>Backend debe estar corriendo en:</strong> <code>http://localhost:4000</code></p>
+    </div>
+
+    <div class="grid">
+        <div class="image-test">
+            <h3>🎧 Auriculares 1</h3>
+            <div class="url">http://localhost:4000/uploads/auriculares1.jpg</div>
+            <img src="http://localhost:4000/uploads/auriculares1.jpg" 
+                 alt="Auriculares 1" 
+                 onload="this.nextElementSibling.className='status success'; this.nextElementSibling.textContent='✅ Imagen cargada correctamente';"
+                 onerror="this.nextElementSibling.className='status error'; this.nextElementSibling.textContent='❌ Error al cargar la imagen';">
+            <div class="status">🔄 Cargando...</div>
+        </div>
+
+        <div class="image-test">
+            <h3>🎧 Auriculares 2</h3>
+            <div class="url">http://localhost:4000/uploads/auriculares2.webp</div>
+            <img src="http://localhost:4000/uploads/auriculares2.webp" 
+                 alt="Auriculares 2" 
+                 onload="this.nextElementSibling.className='status success'; this.nextElementSibling.textContent='✅ Imagen cargada correctamente';"
+                 onerror="this.nextElementSibling.className='status error'; this.nextElementSibling.textContent='❌ Error al cargar la imagen';">
+            <div class="status">🔄 Cargando...</div>
+        </div>
+
+        <div class="image-test">
+            <h3>🖱️ Mouse</h3>
+            <div class="url">http://localhost:4000/uploads/mouse1.webp</div>
+            <img src="http://localhost:4000/uploads/mouse1.webp" 
+                 alt="Mouse" 
+                 onload="this.nextElementSibling.className='status success'; this.nextElementSibling.textContent='✅ Imagen cargada correctamente';"
+                 onerror="this.nextElementSibling.className='status error'; this.nextElementSibling.textContent='❌ Error al cargar la imagen';">
+            <div class="status">🔄 Cargando...</div>
+        </div>
+
+        <div class="image-test">
+            <h3>💡 Lámpara</h3>
+            <div class="url">http://localhost:4000/uploads/lampara1.jpg</div>
+            <img src="http://localhost:4000/uploads/lampara1.jpg" 
+                 alt="Lámpara" 
+                 onload="this.nextElementSibling.className='status success'; this.nextElementSibling.textContent='✅ Imagen cargada correctamente';"
+                 onerror="this.nextElementSibling.className='status error'; this.nextElementSibling.textContent='❌ Error al cargar la imagen';">
+            <div class="status">🔄 Cargando...</div>
+        </div>
+    </div>
+
+    <div class="header">
+        <h2>📋 Próximos Pasos</h2>
+        <ol>
+            <li><strong>Verifica que todas las imágenes se cargan</strong> (deben mostrar ✅)</li>
+            <li><strong>Ejecuta el script SQL</strong> en tu base de datos:
+                <div class="url">backend/update_your_images.sql</div>
+            </li>
+            <li><strong>Ve al marketplace</strong> y haz clic en los productos</li>
+            <li><strong>¡Disfruta tus imágenes!</strong> 🎉</li>
+        </ol>
+    </div>
+
+    <script>
+        // Verificar si el backend está corriendo
+        fetch('http://localhost:4000/health/db')
+            .then(response => response.json())
+            .then(data => {
+                console.log('✅ Backend está corriendo:', data);
+            })
+            .catch(error => {
+                console.error('❌ Backend no está corriendo:', error);
+                document.body.insertAdjacentHTML('afterbegin', 
+                    '<div style="background: #f8d7da; color: #721c24; padding: 15px; margin: 10px; border-radius: 4px; border: 1px solid #f5c6cb;">' +
+                    '⚠️ <strong>Backend no está corriendo!</strong> Ejecuta: <code>cd backend && npm run dev</code>' +
+                    '</div>');
+            });
+    </script>
+</body>
+</html>
+
+

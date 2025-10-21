@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Imágenes - Marketplace</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .image-test {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        .image-test img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        .url {
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test de Imágenes del Marketplace</h1>
+    <p>Esta página prueba que las imágenes se estén sirviendo correctamente desde el backend.</p>
+
+    <div class="image-test">
+        <h3>Imagen de Placeholder (debería funcionar)</h3>
+        <div class="url">https://via.placeholder.com/400x300/4F46E5/FFFFFF?text=Test+Image</div>
+        <img src="https://via.placeholder.com/400x300/4F46E5/FFFFFF?text=Test+Image" alt="Imagen de prueba">
+    </div>
+
+    <div class="image-test">
+        <h3>Imagen desde el servidor local (si existe)</h3>
+        <div class="url">http://localhost:4000/uploads/test.jpg</div>
+        <img src="http://localhost:4000/uploads/test.jpg" alt="Imagen del servidor" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+        <div style="display:none; color: red;">❌ Esta imagen no existe en el servidor local</div>
+    </div>
+
+    <h2>URLs de ejemplo para la base de datos:</h2>
+    <ul>
+        <li><code>https://via.placeholder.com/400x300/4F46E5/FFFFFF?text=Auriculares+1</code></li>
+        <li><code>https://via.placeholder.com/400x300/7C3AED/FFFFFF?text=Auriculares+2</code></li>
+        <li><code>https://via.placeholder.com/400x300/059669/FFFFFF?text=Auriculares+3</code></li>
+        <li><code>https://via.placeholder.com/400x300/DC2626/FFFFFF?text=Mouse+1</code></li>
+        <li><code>https://via.placeholder.com/400x300/EA580C/FFFFFF?text=Mouse+2</code></li>
+        <li><code>https://via.placeholder.com/400x300/0891B2/FFFFFF?text=Lámpara+LED</code></li>
+    </ul>
+
+    <h2>Para usar imágenes locales:</h2>
+    <ol>
+        <li>Coloca las imágenes en la carpeta <code>backend/uploads/</code></li>
+        <li>Usa URLs como <code>http://localhost:4000/uploads/nombre-imagen.jpg</code></li>
+        <li>Actualiza la base de datos con las rutas correctas</li>
+    </ol>
+</body>
+</html>
+
+
