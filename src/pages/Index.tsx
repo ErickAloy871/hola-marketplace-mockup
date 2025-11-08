@@ -8,6 +8,7 @@ import ProductCard from "@/components/ProductCard";
 import Footer from "@/components/Footer";
 import { productosApi } from "@/lib/api";
 
+
 interface Product {
   id: string;
   nombre: string;
@@ -18,15 +19,18 @@ interface Product {
   urlFoto: string | null;
 }
 
+
 const Index = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
+
   useEffect(() => {
     loadProducts();
   }, []);
+
 
   const loadProducts = async () => {
     try {
@@ -42,6 +46,7 @@ const Index = () => {
     }
   };
 
+
   const handleSearch = async () => {
     try {
       setLoading(true);
@@ -55,6 +60,7 @@ const Index = () => {
     }
   };
 
+
   const filters = [
     { label: "New", active: true },
     { label: "Price ascending", active: false },
@@ -62,16 +68,20 @@ const Index = () => {
     { label: "Rating", active: false },
   ];
 
+
   return (
-    <div className="min-h-screen bg-background">
+    // ✅ CAMBIO: Agregar flex y flex-col para layout vertical
+    <div className="flex flex-col min-h-screen bg-background">
       <Navbar />
       
-      <main className="container mx-auto px-6 py-6">
+      {/* ✅ CAMBIO: flex-1 para que el contenido crezca */}
+      <main className="flex-1 container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar */}
           <div className="lg:block hidden">
             <CategorySidebar />
           </div>
+
 
           {/* Main Content */}
           <div className="flex-1">
@@ -109,12 +119,14 @@ const Index = () => {
             </div>
 
 
+
             {/* Loading State */}
             {loading && (
               <div className="text-center py-8">
                 <div className="text-muted-foreground">Cargando productos...</div>
               </div>
             )}
+
 
             {/* Error State */}
             {error && (
@@ -128,6 +140,7 @@ const Index = () => {
                 </button>
               </div>
             )}
+
 
             {/* Products Grid */}
             {!loading && !error && (
@@ -147,6 +160,7 @@ const Index = () => {
               </div>
             )}
 
+
             {/* No Products */}
             {!loading && !error && products.length === 0 && (
               <div className="text-center py-8">
@@ -157,9 +171,12 @@ const Index = () => {
         </div>
       </main>
 
+
+      {/* ✅ Footer siempre al final */}
       <Footer />
     </div>
   );
 };
+
 
 export default Index;

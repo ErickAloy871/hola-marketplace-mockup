@@ -7,27 +7,27 @@ import { fileURLToPath } from "url";
 import { pool } from "./db.js";
 import auth from "./routes/auth.js";
 import productos from "./routes/productos.js";
+import router from './routes/index.js';  // ✅ MODIFICADO: Sin .js
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
 app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
-// Servir archivos estáticos desde la carpeta uploads
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.get("/health/db", async (_req, res) => {
   try {
     const [rows] = await pool.query("SELECT 1 as ok");
     res.json({ db: (rows as any)[0].ok === 1 ? "up" : "down" });
-  } catch { res.status(500).json({ db: "down" }); }
+  } catch (e) { res.status(500).json({ db: "down" }); }
 });
 
-app.use("/auth", auth);
-app.use("/productos", productos);
+app.use('/api', router);
 
 (async () => {
   try { const c = await pool.getConnection(); await c.query("SELECT 1"); c.release(); console.log("✅ MySQL OK"); }

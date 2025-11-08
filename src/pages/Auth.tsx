@@ -4,14 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { authApi } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
+
 
 const Auth = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useAuth();
+  
+  // ✅ CAMBIO: Obtener el tab desde URL params
+  const tabParam = searchParams.get("tab") || "login";
+  const [activeTab, setActiveTab] = useState(tabParam);
+
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [registerNombre, setRegisterNombre] = useState("");
@@ -21,39 +27,115 @@ const Auth = () => {
   const [registerTelefono, setRegisterTelefono] = useState("");
   const [registerDireccion, setRegisterDireccion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
+
+  // ✅ CAMBIO: Login real con API
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("¡Inicio de sesión exitoso!");
-    navigate("/");
+    setLoading(true);
+    setError('');
+
+    try {
+      if (!loginEmail || !loginPassword) {
+        toast.error("Por favor, completa todos los campos");
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('http://localhost:4000/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          correo: loginEmail,
+          password: loginPassword
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(errorData.message || 'Credenciales inválidas');
+        setLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      
+      // ✅ Guardar token y usuario
+      login(data.token, data.usuario);
+      toast.success("¡Inicio de sesión exitoso!");
+      
+      // ✅ Redirigir a homepage
+      navigate("/");
+    } catch (err) {
+      console.error("Error en login:", err);
+      toast.error("Error al iniciar sesión");
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    
+    setError('');
+
     try {
-      // Validar que todos los campos estén completos
-      if (!registerNombre || !registerApellido || !registerEmail || !registerPassword || !registerTelefono || !registerDireccion) {
+      if (!registerNombre || !registerApellido || !registerEmail ||
+        !registerPassword || !registerTelefono || !registerDireccion) {
         toast.error("Por favor, completa todos los campos");
+        setLoading(false);
         return;
       }
+
+      // 1️⃣ Registrar al usuario
+      const response = await fetch('http://localhost:4000/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nombre: registerNombre,
+          apellido: registerApellido,
+          correo: registerEmail,
+          password: registerPassword,
+          telefono: registerTelefono,
+          direccion: registerDireccion
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error en registro');
+      }
+
+      const data = await response.json();
+      const usuarioId = data.usuarioId ?? data.user?.id; 
       
-      // Llamar a la API de registro
-      const response = await authApi.register(
-        registerNombre,
-        registerApellido,
-        registerEmail,
-        registerPassword,
-        registerTelefono,
-        registerDireccion
-      );
-      
-      // Usar el hook de autenticación para guardar el token y usuario
-      login(response.token, response.user);
-      
-      toast.success("¡Registro exitoso!");
-      navigate("/");
+      if (!usuarioId) {
+        throw new Error("No se recibió el ID del usuario");
+      }
+
+      console.log("Enviando a send-verification:", { usuarioId });
+
+      // 2️⃣ Enviar código de verificación
+      const sendVerificationResponse = await fetch('http://localhost:4000/api/auth/send-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ usuarioId })
+      });
+
+      if (!sendVerificationResponse.ok) {
+        const errorData = await sendVerificationResponse.json();
+        toast.error('Error al enviar código de verificación');
+        setLoading(false);
+        return;
+      }
+
+      toast.success("¡Registro exitoso! Verifica tu email");
+      navigate('/verify-email', {
+        state: { usuarioId, correo: registerEmail, nombre: registerNombre }
+      });
+
     } catch (error) {
       console.error("Error en registro:", error);
       toast.error("Error al registrarse. Verifica tus datos.");
@@ -61,6 +143,7 @@ const Auth = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background flex items-center justify-center p-4 relative">
@@ -73,9 +156,8 @@ const Auth = () => {
         <ArrowLeft className="w-4 h-4 mr-2" />
         Volver a la página principal
       </Button>
-      
-      <div className="w-full max-w-md">
 
+      <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">
@@ -91,8 +173,10 @@ const Auth = () => {
 
         {/* Auth Card */}
         <div className="bg-card rounded-2xl shadow-xl border-4 border-primary/30 p-8">
-          <Tabs defaultValue="login" className="w-full">
+          {/* ✅ CAMBIO: Usar activeTab y setActiveTab */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-8 bg-secondary">
+              {/* ✅ CAMBIO: value="register" (no "registrarse") */}
               <TabsTrigger value="register" className="data-[state=active]:bg-card">
                 Registrarse
               </TabsTrigger>
@@ -134,8 +218,9 @@ const Auth = () => {
                 <Button
                   type="submit"
                   className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-6 rounded-lg shadow-sm"
+                  disabled={loading}
                 >
-                  Entrar
+                  {loading ? "Iniciando sesión..." : "Entrar"}
                 </Button>
                 <button
                   type="button"
@@ -178,7 +263,7 @@ const Auth = () => {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="register-email" className="text-foreground font-semibold">
                     Correo electrónico
@@ -193,7 +278,7 @@ const Auth = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="register-password" className="text-foreground font-semibold">
                     Contraseña
@@ -208,7 +293,7 @@ const Auth = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="register-telefono" className="text-foreground font-semibold">
                     Teléfono
@@ -223,7 +308,7 @@ const Auth = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="register-direccion" className="text-foreground font-semibold">
                     Dirección
@@ -238,7 +323,7 @@ const Auth = () => {
                     required
                   />
                 </div>
-                
+
                 <Button
                   type="submit"
                   className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-6 rounded-lg shadow-sm"

@@ -1,39 +1,43 @@
 import { useState, useEffect } from "react";
-import { authApi } from "@/lib/api";
+
 
 interface User {
   id: string;
   nombre: string;
   apellido: string;
   correo: string;
+  roles?: string[];
 }
+
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+
   useEffect(() => {
     checkAuth();
   }, []);
 
-  const checkAuth = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      setLoading(false);
-      return;
-    }
 
-    try {
-      const userData = await authApi.me();
-      setUser(userData);
-    } catch (error) {
-      // Token inválido, limpiar localStorage
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-    } finally {
-      setLoading(false);
+  const checkAuth = () => {
+    const token = localStorage.getItem("token");
+    const userStr = localStorage.getItem("user");
+    
+    if (token && userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        setUser(userData);
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     }
+    
+    setLoading(false);
   };
+
 
   const login = (token: string, userData: User) => {
     localStorage.setItem("token", token);
@@ -41,11 +45,13 @@ export const useAuth = () => {
     setUser(userData);
   };
 
+
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
   };
+
 
   return {
     user,
