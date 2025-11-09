@@ -1,4 +1,4 @@
-import { ShoppingCart, User, LogOut } from "lucide-react";
+import { ShoppingCart, User, LogOut, Shield } from "lucide-react"; // ✅ Agregar Shield
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,19 +7,20 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator, // ✅ NUEVO
 } from "@/components/ui/dropdown-menu";
-
 
 const Navbar = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
-
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
+  // ✅ NUEVO: Verificar si es moderador
+  const isModerator = user?.roles?.includes("MODERADOR");
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
@@ -31,7 +32,6 @@ const Navbar = () => {
               <ShoppingCart className="w-6 h-6 text-white" />
             </div>
           </div>
-
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-6">
@@ -46,12 +46,11 @@ const Navbar = () => {
             </button>
           </div>
 
-
           {/* Auth Section */}
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <>
-                {/* ✅ NUEVO: Mostrar rol del usuario */}
+                {/* Mostrar rol del usuario */}
                 <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                   {user?.roles?.join(", ") || "Usuario"}
                 </span>
@@ -70,18 +69,34 @@ const Navbar = () => {
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
                       {user?.correo}
                     </div>
-                    {/* ✅ NUEVO: Opción para cambiar a vendedor */}
-                    {user?.roles?.includes("COMPRADOR") && !user?.roles?.includes("VENDEDOR") && (
+
+                    <DropdownMenuSeparator />
+
+                    {/* ✅ NUEVO: Panel de moderación (solo para moderadores) */}
+                    {isModerator && (
+                      <DropdownMenuItem onClick={() => navigate("/moderation")}>
+                        <Shield className="mr-2 h-4 w-4 text-blue-600" />
+                        <span className="text-blue-600">Panel de Moderación</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {/* ✅ MODIFICADO: Ocultar "Empezar a vender" para moderadores */}
+                    {!isModerator && user?.roles?.includes("COMPRADOR") && !user?.roles?.includes("VENDEDOR") && (
                       <DropdownMenuItem 
                         onClick={() => {
                           // Aquí iría la llamada a /cambiar-a-vendedor
-                          alert("Aún no implementado, pero aquí irías a vender");
+                          alert("Funcionalidad pendiente: cambiar a vendedor");
                         }}
                         className="text-green-600"
                       >
-                          Empezar a vender
+                        Empezar a vender
                       </DropdownMenuItem>
                     )}
+
+                    {isModerator && (
+                      <DropdownMenuSeparator />
+                    )}
+
                     <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                       <LogOut className="mr-2 h-4 w-4" />
                       Cerrar sesión
@@ -91,7 +106,6 @@ const Navbar = () => {
               </>
             ) : (
               <>
-                {/* ✅ CAMBIO: Navegar a /auth con tab=login */}
                 <Button
                   variant="outline"
                   onClick={() => navigate("/auth?tab=login")}
@@ -100,7 +114,6 @@ const Navbar = () => {
                   Entrar
                 </Button>
                 
-                {/* ✅ CAMBIO: Navegar a /auth con tab=register */}
                 <Button
                   onClick={() => navigate("/auth?tab=register")}
                   className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white shadow-sm"
@@ -115,6 +128,5 @@ const Navbar = () => {
     </nav>
   );
 };
-
 
 export default Navbar;

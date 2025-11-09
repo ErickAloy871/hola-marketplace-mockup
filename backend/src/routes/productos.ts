@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db.js";
 import type { RowDataPacket } from "mysql2";
+import { verifyToken, blockModerator } from "../middleware/roleMiddleware.js"; // ✅ NUEVO
 
 type ProductoRow = RowDataPacket & {
   id: string;
@@ -131,5 +132,41 @@ r.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-export default r;
+/* =============================
+   ✅ NUEVO: POST /productos → crear producto
+   Solo VENDEDORES pueden crear productos (NO moderadores)
+   ============================= */
+r.post("/", verifyToken, blockModerator, async (req: Request, res: Response) => {
+  try {
+    const { nombre, descripcion, precio, ubicacion, categoriaId } = req.body;
+    const vendedorId = req.user?.id;
 
+    // Validaciones
+    if (!nombre || !precio || !categoriaId) {
+      return res.status(400).json({ 
+        message: "Faltan campos requeridos: nombre, precio, categoriaId" 
+      });
+    }
+
+    // Crear la publicación con estado PENDIENTE
+    const [result] = await pool.query(
+      `INSERT INTO PUBLICACIONES (nombre, descripcion, precio, ubicacion, categoriaId, vendedorId, estado, fechaPublicacion)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDIENTE', NOW())`,
+      [nombre, descripcion, precio, ubicacion, categoriaId, vendedorId]
+    );
+
+    const publicacionId = (result as any).insertId;
+
+    console.log(`✅ Nueva publicación creada: ${publicacionId} por vendedor ${vendedorId}`);
+
+    res.status(201).json({
+      message: "Publicación creada exitosamente. Pendiente de aprobación",
+      publicacionId
+    });
+  } catch (error) {
+    console.error("Error al crear publicación:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+export default r;

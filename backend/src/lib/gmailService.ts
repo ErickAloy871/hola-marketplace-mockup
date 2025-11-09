@@ -6,19 +6,22 @@ export class GmailService {
 
 
   constructor() {
+    console.log("🔍 DEBUG - Variables de OAuth2:");
+    console.log("OAUTH_CLIENT_ID:", process.env.OAUTH_CLIENT_ID ? "✅ OK" : "❌ UNDEFINED");
+    console.log("OAUTH_CLIENT_SECRET:", process.env.OAUTH_CLIENT_SECRET ? "✅ OK" : "❌ UNDEFINED");
+    console.log("OAUTH_REFRESH_TOKEN:", process.env.OAUTH_REFRESH_TOKEN ? "✅ OK" : "❌ UNDEFINED");
+  
     const OAuth2 = google.auth.OAuth2;
     const oauth2Client = new OAuth2(
       process.env.OAUTH_CLIENT_ID,
       process.env.OAUTH_CLIENT_SECRET,
       'https://developers.google.com/oauthplayground'
     );
-
-
+  
     oauth2Client.setCredentials({
       refresh_token: process.env.OAUTH_REFRESH_TOKEN
     });
-
-
+  
     this.gmail = google.gmail({ version: 'v1', auth: oauth2Client });
   }
 

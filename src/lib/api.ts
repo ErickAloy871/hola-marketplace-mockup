@@ -43,5 +43,56 @@ export const productosApi = {
   
   getById: async (id: string) => {
     return api(`/productos/${id}`);
+  },
+
+  // ✅ NUEVO: Crear producto
+  create: async (productoData: {
+    nombre: string;
+    descripcion: string;
+    precio: number;
+    ubicacion: string;
+    categoriaId: number;
+  }) => {
+    return api("/productos", {
+      method: "POST",
+      body: JSON.stringify(productoData)
+    });
   }
+};
+
+// ✅ NUEVO: API de moderación
+export const moderationApi = {
+  getPending: async () => {
+    return api("/moderation/pending");
+  },
+
+  approve: async (id: number) => {
+    return api(`/moderation/approve/${id}`, {
+      method: "POST"
+    });
+  },
+
+  reject: async (id: number, motivo?: string) => {
+    return api(`/moderation/reject/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ motivo })
+    });
+  },
+
+  getStats: async () => {
+    return api("/moderation/stats");
+  },
+
+  // ✅ AGREGADO: Obtener todas las publicaciones pendientes/publicadas (para el panel)
+  getAllModeration: async () => {
+    return api("/moderation/publicaciones-moderacion");
+  },
+
+  // ✅ AGREGADO: Dar de baja producto (pendiente o publicado)
+  darDeBaja: async (id: number, motivo?: string) => {
+    return api(`/moderation/dar-baja/${id}`, {
+      method: "POST",
+      body: JSON.stringify({ motivo })
+    });
+  },
 };

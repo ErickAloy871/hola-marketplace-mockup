@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 
-
 interface User {
   id: string;
   nombre: string;
@@ -9,21 +8,18 @@ interface User {
   roles?: string[];
 }
 
-
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
+  const [loading, setLoading] = useState(true); // Indica si se está cargando la autenticación
 
   useEffect(() => {
     checkAuth();
   }, []);
 
-
   const checkAuth = () => {
     const token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
-    
+
     if (token && userStr) {
       try {
         const userData = JSON.parse(userStr);
@@ -34,10 +30,9 @@ export const useAuth = () => {
         localStorage.removeItem("user");
       }
     }
-    
+
     setLoading(false);
   };
-
 
   const login = (token: string, userData: User) => {
     localStorage.setItem("token", token);
@@ -45,20 +40,18 @@ export const useAuth = () => {
     setUser(userData);
   };
 
-
   const logout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);
   };
 
-
   return {
     user,
-    loading,
+    loading,             // Estado para indicar carga
     isAuthenticated: !!user,
     login,
     logout,
-    checkAuth
+    checkAuth,
   };
 };
