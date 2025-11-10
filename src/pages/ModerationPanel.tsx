@@ -102,21 +102,19 @@ const ModerationPanel = () => {
         <div className="flex gap-4 mb-6 border-b border-border">
           <button
             onClick={() => setActiveTab("pendientes")}
-            className={`pb-2 px-4 font-semibold transition-colors ${
-              activeTab === "pendientes"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`pb-2 px-4 font-semibold transition-colors ${activeTab === "pendientes"
+              ? "border-b-2 border-primary text-primary"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             Pendientes ({productosPendientes.length})
           </button>
           <button
             onClick={() => setActiveTab("publicadas")}
-            className={`pb-2 px-4 font-semibold transition-colors ${
-              activeTab === "publicadas"
-                ? "border-b-2 border-primary text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className={`pb-2 px-4 font-semibold transition-colors ${activeTab === "publicadas"
+              ? "border-b-2 border-primary text-primary"
+              : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             Publicadas ({productosPublicadas.length})
           </button>
@@ -140,7 +138,7 @@ const ModerationPanel = () => {
                       <div className="flex gap-4">
                         {producto.urlFoto && (
                           <img
-                            src={`http://localhost:4000/uploads/${producto.urlFoto.replace('/uploads/', '')}`}
+                            src={producto.urlFoto && producto.urlFoto.startsWith('http') ? producto.urlFoto : `http://localhost:4000${producto.urlFoto}`}
                             alt={producto.nombre}
                             className="w-32 h-32 object-cover rounded-md"
                           />
@@ -197,7 +195,7 @@ const ModerationPanel = () => {
                       <div className="flex gap-4">
                         {producto.urlFoto && (
                           <img
-                            src={`http://localhost:4000/uploads/${producto.urlFoto.replace('/uploads/', '')}`}
+                            src={producto.urlFoto && producto.urlFoto.startsWith('http') ? producto.urlFoto : `http://localhost:4000${producto.urlFoto}`}
                             alt={producto.nombre}
                             className="w-32 h-32 object-cover rounded-md"
                           />
