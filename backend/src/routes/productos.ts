@@ -186,7 +186,7 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
 
     // En multipart, los campos vienen en req.body y los archivos en req.files
     const { nombre, descripcion, precio, ubicacion, categoriaId, categoria } = req.body as any;
-    const vendedorId = (req as any).user?.id;
+    const usuarioId = (req as any).user?.id;
 
     // Validaciones mínimas
     if (!nombre || !precio) {
@@ -219,7 +219,7 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
     if (!finalUbicacion) {
       const [uRows] = await pool.query<RowDataPacket[]>(
         "SELECT direccion FROM USUARIOS WHERE id = ? LIMIT 1",
-        [vendedorId]
+        [usuarioId]
       );
       if (uRows.length > 0) {
         finalUbicacion = (uRows[0] as any).direccion || null;
@@ -228,9 +228,9 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
 
     // Crear la publicación con estado PENDIENTE
     const [result] = await pool.query(
-      `INSERT INTO PUBLICACIONES (nombre, descripcion, precio, ubicacion, categoriaId, vendedorId, estado, fechaPublicacion)
+      `INSERT INTO PUBLICACIONES (nombre, descripcion, precio, ubicacion, categoriaId, usuarioId, estado, fechaPublicacion)
        VALUES (?, ?, ?, ?, ?, ?, 'PENDIENTE', NOW())`,
-      [nombre, descripcion, precio, finalUbicacion, finalCategoriaId, vendedorId]
+      [nombre, descripcion, precio, finalUbicacion, finalCategoriaId, usuarioId]
     );
 
     const publicacionId = (result as any).insertId;
@@ -263,7 +263,7 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       console.log('ℹ️ No se subieron imágenes con esta publicación');
     }
 
-    console.log(`✅ Nueva publicación creada: ${publicacionId} por vendedor ${vendedorId}`);
+    console.log(`✅ Nueva publicación creada: ${publicacionId} por vendedor ${usuarioId}`);
 
     res.status(201).json({
       message: "Publicación creada exitosamente. Pendiente de aprobación",
