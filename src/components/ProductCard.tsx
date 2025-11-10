@@ -1,6 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
+import { BACKEND_BASE } from "@/lib/api";
 import { MapPin } from "lucide-react";
 
 interface ProductCardProps {
@@ -23,19 +24,34 @@ const ProductCard = ({ id, title, price, description, image, location, category 
     >
       <div className="aspect-square bg-muted/50 relative overflow-hidden">
         {image ? (
-          <img 
-            src={image} 
-            alt={title} 
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200" 
-          />
+          (() => {
+            // Normalizar la URL de la imagen: puede ser
+            // - URL completa: http(s)://...
+            // - ruta relativa empezando con /uploads/...
+            // - solo el nombre de archivo
+            const imgStr = String(image);
+            const src = imgStr.startsWith("http")
+              ? imgStr
+              : imgStr.startsWith("/")
+                ? `${BACKEND_BASE}${imgStr}`
+                : `${BACKEND_BASE}/${imgStr}`;
+
+            return (
+              <img
+                src={src}
+                alt={title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+              />
+            );
+          })()
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-muted">
             <div className="text-muted-foreground text-sm">Sin imagen</div>
           </div>
         )}
         {category && (
-          <Badge 
-            variant="secondary" 
+          <Badge
+            variant="secondary"
             className="absolute top-2 left-2 text-xs"
           >
             {category}

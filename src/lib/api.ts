@@ -1,8 +1,13 @@
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
+// URL base del backend (sin el sufijo /api). Usar la variable VITE_API_URL si está definida.
+export const BACKEND_BASE = (import.meta.env.VITE_API_URL
+  ? String(import.meta.env.VITE_API_URL).replace(/\/api\/?$/, "")
+  : "http://localhost:4000");
+
 export async function api(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem("token");
-  const headers = { "Content-Type":"application/json", ...(token? { Authorization:`Bearer ${token}` }:{}) };
+  const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
   const res = await fetch(API + path, { ...opts, headers });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -16,14 +21,14 @@ export const authApi = {
       body: JSON.stringify({ correo, password })
     });
   },
-  
+
   register: async (nombre: string, apellido: string, correo: string, password: string, telefono: string, direccion: string) => {
     return api("/auth/register", {
       method: "POST",
       body: JSON.stringify({ nombre, apellido, correo, password, telefono, direccion })
     });
   },
-  
+
   me: async () => {
     return api("/auth/me");
   }
@@ -40,7 +45,7 @@ export const productosApi = {
     const query = searchParams.toString();
     return api(`/productos${query ? `?${query}` : ""}`);
   },
-  
+
   getById: async (id: string) => {
     return api(`/productos/${id}`);
   },
@@ -95,4 +100,11 @@ export const moderationApi = {
       body: JSON.stringify({ motivo })
     });
   },
+
+  // Obtener categorías activas
+  getCategories: async () => {
+    // Las categorías están expuestas en el router de productos en el backend
+    // en la ruta /api/productos/categorias, por eso solicitamos /productos/categorias
+    return api("/productos/categorias");
+  }
 };

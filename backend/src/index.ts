@@ -14,7 +14,14 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 
-app.use(helmet());
+// Helmet por defecto puede establecer Cross-Origin-Resource-Policy a "same-origin",
+// lo que bloquea la incrustación de imágenes desde otro origen (frontend en :5173).
+// Ajustamos la política para permitir cross-origin en recursos estáticos (images).
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// CORS para APIs
 app.use(cors());
 app.use(express.json());
 

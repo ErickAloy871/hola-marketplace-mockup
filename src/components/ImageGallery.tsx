@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BACKEND_BASE } from "@/lib/api";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,13 +22,13 @@ const ImageGallery = ({ images, alt }: ImageGalleryProps) => {
   }
 
   const goToPrevious = () => {
-    setCurrentIndex((prevIndex) => 
+    setCurrentIndex((prevIndex) =>
       prevIndex === 0 ? images.length - 1 : prevIndex - 1
     );
   };
 
   const goToNext = () => {
-    setCurrentIndex((prevIndex) => 
+    setCurrentIndex((prevIndex) =>
       prevIndex === images.length - 1 ? 0 : prevIndex + 1
     );
   };
@@ -41,11 +42,18 @@ const ImageGallery = ({ images, alt }: ImageGalleryProps) => {
       {/* Imagen principal */}
       <div className="relative flex justify-center">
         <img
-          src={images[currentIndex]}
+          src={(() => {
+            const img = String(images[currentIndex] || "");
+            return img.startsWith("http")
+              ? img
+              : img.startsWith("/")
+                ? `${BACKEND_BASE}${img}`
+                : `${BACKEND_BASE}/${img}`;
+          })()}
           alt={`${alt} - Imagen ${currentIndex + 1}`}
           className="max-w-full h-auto max-h-96 object-contain rounded-lg shadow-md"
         />
-        
+
         {/* Navegación solo si hay más de una imagen */}
         {images.length > 1 && (
           <>
@@ -76,14 +84,20 @@ const ImageGallery = ({ images, alt }: ImageGalleryProps) => {
             <button
               key={index}
               onClick={() => goToImage(index)}
-              className={`w-16 h-16 rounded-md overflow-hidden border-2 transition-all ${
-                index === currentIndex 
-                  ? 'border-primary ring-2 ring-primary/20' 
-                  : 'border-border hover:border-primary/50'
-              }`}
+              className={`w-16 h-16 rounded-md overflow-hidden border-2 transition-all ${index === currentIndex
+                ? 'border-primary ring-2 ring-primary/20'
+                : 'border-border hover:border-primary/50'
+                }`}
             >
               <img
-                src={image}
+                src={(() => {
+                  const img = String(image || "");
+                  return img.startsWith("http")
+                    ? img
+                    : img.startsWith("/")
+                      ? `${BACKEND_BASE}${img}`
+                      : `${BACKEND_BASE}/${img}`;
+                })()}
                 alt={`${alt} - Miniatura ${index + 1}`}
                 className="w-full h-full object-cover"
               />

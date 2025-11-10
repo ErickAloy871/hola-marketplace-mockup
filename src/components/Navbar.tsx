@@ -54,7 +54,7 @@ const Navbar = () => {
                 <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
                   {user?.roles?.join(", ") || "Usuario"}
                 </span>
-                
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="icon" className="relative">
@@ -82,11 +82,8 @@ const Navbar = () => {
 
                     {/* ✅ MODIFICADO: Ocultar "Empezar a vender" para moderadores */}
                     {!isModerator && user?.roles?.includes("COMPRADOR") && !user?.roles?.includes("VENDEDOR") && (
-                      <DropdownMenuItem 
-                        onClick={() => {
-                          // Aquí iría la llamada a /cambiar-a-vendedor
-                          alert("Funcionalidad pendiente: cambiar a vendedor");
-                        }}
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent('open-sell-modal'))}
                         className="text-green-600"
                       >
                         Empezar a vender
@@ -113,7 +110,7 @@ const Navbar = () => {
                 >
                   Entrar
                 </Button>
-                
+
                 <Button
                   onClick={() => navigate("/auth?tab=register")}
                   className="bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white shadow-sm"
