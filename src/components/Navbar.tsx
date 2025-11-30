@@ -10,6 +10,15 @@ import {
   DropdownMenuSeparator, // ✅ NUEVO
 } from "@/components/ui/dropdown-menu";
 
+function getDisplayRole(roles: string[]) {
+  if (!roles) return "";
+
+  if (roles.includes("ADMINISTRADOR")) return "ADMINISTRADOR";
+  if (roles.includes("MODERADOR")) return "MODERADOR";
+
+  return roles.join(", ");
+}
+
 const Navbar = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
@@ -21,6 +30,8 @@ const Navbar = () => {
 
   // ✅ NUEVO: Verificar si es moderador
   const isModerator = user?.roles?.includes("MODERADOR");
+
+  const isAdmin =user?.roles?.includes("ADMINISTRADOR") || user?.roles?.includes("ADMIN");
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
@@ -51,9 +62,10 @@ const Navbar = () => {
             {isAuthenticated ? (
               <>
                 {/* Mostrar rol del usuario */}
-                <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">
-                  {user?.roles?.join(", ") || "Usuario"}
+                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  {getDisplayRole(user.roles)}
                 </span>
+
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -72,27 +84,41 @@ const Navbar = () => {
 
                     <DropdownMenuSeparator />
 
-                    {/* ✅ NUEVO: Panel de moderación (solo para moderadores) */}
-                    {isModerator && (
+                    {/* ✅ Panel de Administrador: SOLO si es ADMIN */}
+                    {isAdmin && (
+                      <DropdownMenuItem onClick={() => navigate("/admin")}>
+                        <Shield className="mr-2 h-4 w-4 text-emerald-600" />
+                        <span className="text-emerald-600">Panel de Administrador</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    {/* ✅ Panel de Moderación: SOLO si es moderador y NO es admin */}
+                    {!isAdmin && isModerator && (
                       <DropdownMenuItem onClick={() => navigate("/moderation")}>
                         <Shield className="mr-2 h-4 w-4 text-blue-600" />
                         <span className="text-blue-600">Panel de Moderación</span>
                       </DropdownMenuItem>
                     )}
 
-                    {/* ✅ MODIFICADO: Ocultar "Empezar a vender" para moderadores */}
-                    {!isModerator && user?.roles?.includes("COMPRADOR") && !user?.roles?.includes("VENDEDOR") && (
-                      <DropdownMenuItem
-                        onClick={() => window.dispatchEvent(new CustomEvent('open-sell-modal'))}
-                        className="text-green-600"
-                      >
-                        Empezar a vender
-                      </DropdownMenuItem>
-                    )}
 
-                    {isModerator && (
-                      <DropdownMenuSeparator />
-                    )}
+                    {/* ✅ Ocultar "Empezar a vender" para moderadores y administradores */}
+                    {!isModerator &&
+                      !isAdmin &&
+                      user?.roles?.includes("COMPRADOR") &&
+                      !user?.roles?.includes("VENDEDOR") && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            window.dispatchEvent(
+                              new CustomEvent("open-sell-modal")
+                            )
+                          }
+                          className="text-green-600"
+                        >
+                          Empezar a vender
+                        </DropdownMenuItem>
+                      )}
+
+                    {(isModerator || isAdmin) && <DropdownMenuSeparator />}
 
                     <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                       <LogOut className="mr-2 h-4 w-4" />

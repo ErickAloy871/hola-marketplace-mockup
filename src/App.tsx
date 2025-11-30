@@ -9,6 +9,7 @@ import ModerationPanel from "./pages/ModerationPanel";
 import CreateProduct from "./pages/CreateProduct";
 import SellDialog from "@/components/SellDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import AdminDashboard from "./pages/AdminDashboard";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/moderation" element={<ModerationPanel />} /> {/* ✅ NUEVO */}
+         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/sell" element={<CreateProduct />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

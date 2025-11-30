@@ -7,7 +7,10 @@ import { fileURLToPath } from "url";
 import { pool } from "./db.js";
 import auth from "./routes/auth.js";
 import productos from "./routes/productos.js";
-import router from './routes/index.js';  // ✅ MODIFICADO: Sin .js
+import router from './routes/index.js';
+import adminRoutes from "./routes/admin.js";
+
+// ✅ MODIFICADO: Sin .js
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -35,6 +38,8 @@ app.get("/health/db", async (_req, res) => {
 });
 
 app.use('/api', router);
+app.use('/api/admin', adminRoutes);
+
 
 (async () => {
   try { const c = await pool.getConnection(); await c.query("SELECT 1"); c.release(); console.log("✅ MySQL OK"); }
