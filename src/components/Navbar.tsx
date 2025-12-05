@@ -47,7 +47,7 @@ const Navbar = () => {
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-6">
             <button className="text-foreground hover:text-primary transition-colors font-medium">
-              Productos
+              Mis Productos
             </button>
             <button className="text-foreground hover:text-primary transition-colors font-medium">
               Notificaciones

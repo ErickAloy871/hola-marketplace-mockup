@@ -160,7 +160,11 @@ export class GmailService {
             <p class="description">Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón de abajo para crear una nueva contraseña:</p>
             
             <div class="button-box">
-              <a href="${resetLink}" class="reset-button">Restablecer Contraseña</a>
+              <a href="${resetLink}" class="reset-button" style="display: inline-block; 
+              background: ${primaryColor}; color: #FFFFFF !important; 
+              padding: 15px 40px; text-decoration: none; 
+              border-radius: 8px; font-weight: bold; 
+              font-size: 16px;">Restablecer Contraseña</a>
             </div>
             
             <p class="expiry-info">Este enlace expira en 1 hora</p>
