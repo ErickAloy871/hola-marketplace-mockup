@@ -57,7 +57,7 @@ export class GmailService {
       <body>
         <div class="container">
           <div class="header">
-            <h1>🔐 Verificación de Cuenta</h1>
+            <h1>Verificación de Cuenta</h1>
           </div>
           <div class="content">
             <p class="greeting">Hola <strong>${nombre}</strong>,</p>
@@ -68,7 +68,6 @@ export class GmailService {
             </div>
             
             <div class="expiry-info">
-              <span class="icon">⏰</span>
               <span>Este código expira en 15 minutos.</span>
             </div>
             

@@ -5,6 +5,32 @@ import { sign, verifyJwt, JWTPayload } from "../lib/jwt.js";
 import type { RowDataPacket } from "mysql2";
 import { GmailService } from "../lib/gmailService.js";
 
+function validatePasswordStrength(password: string): { valid: boolean; message?: string } {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  if (password.length < minLength) {
+      return { valid: false, message: 'La contraseña debe tener al menos 8 caracteres' };
+  }
+  if (!hasUpperCase) {
+      return { valid: false, message: 'La contraseña debe contener al menos una letra mayúscula' };
+  }
+  if (!hasLowerCase) {
+      return { valid: false, message: 'La contraseña debe contener al menos una letra minúscula' };
+  }
+  if (!hasNumber) {
+      return { valid: false, message: 'La contraseña debe contener al menos un número' };
+  }
+  if (!hasSpecialChar) {
+      return { valid: false, message: 'La contraseña debe contener al menos un carácter especial (!@#$%^&*...)' };
+  }
+
+  return { valid: true };
+}
+
 type UserRow = RowDataPacket & {
   id: number;
   nombre: string;
@@ -14,6 +40,7 @@ type UserRow = RowDataPacket & {
   cuentaVerificada?: boolean;
   codigoVerificacion?: string | null;
   codigoExpiracion?: Date | null;
+  intentosRestantes?: number;
 };
 
 type RolRow = RowDataPacket & {
@@ -81,6 +108,11 @@ r.post("/register", async (req: Request, res: Response) => {
     // Validaciones básicas
     if (!nombre || !apellido || !correo || !password) {
       return res.status(400).json({ message: "Faltan campos requeridos" });
+    } 
+
+    const passwordValidation = validatePasswordStrength(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
     }
 
     // Verificar si el correo ya existe
@@ -158,7 +190,7 @@ r.post("/send-verification", async (req: Request, res: Response) => {
 
     // Actualizar código en la tabla USUARIOS
     await pool.query(
-      "UPDATE USUARIOS SET codigoVerificacion = ?, codigoExpiracion = ? WHERE id = ?",
+      "UPDATE USUARIOS SET codigoVerificacion = ?, codigoExpiracion = ?, intentosRestantes = 3 WHERE id = ?",
       [codigo, fechaExpiracion, usuarioId]
     );
 
@@ -193,9 +225,9 @@ r.post("/verify-code", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "usuarioId y codigo son requeridos" });
     }
 
-    // Buscar el usuario con su código
+    // Buscar el usuario
     const [usuarios] = await pool.query<UserRow[]>(
-      "SELECT id, nombre, correo, codigoVerificacion, codigoExpiracion, cuentaVerificada FROM USUARIOS WHERE id = ? LIMIT 1",
+      "SELECT id, codigoVerificacion, codigoExpiracion, cuentaVerificada, intentosRestantes FROM USUARIOS WHERE id = ? LIMIT 1",
       [usuarioId]
     );
 
@@ -204,6 +236,16 @@ r.post("/verify-code", async (req: Request, res: Response) => {
     }
 
     const usuario = usuarios[0];
+    const intentosRestantes = usuario.intentosRestantes ?? 0;
+
+    // ✅ BLOQUEO ABSOLUTO: Si no hay intentos, rechazar INMEDIATAMENTE
+    if (intentosRestantes <= 0) {
+      return res.status(403).json({ 
+        message: "Se agotaron los intentos. Solicita un nuevo código.",
+        intentosRestantes: 0,
+        bloqueado: true  // Bandera para el frontend
+      });
+    }
 
     // Verificar si ya está verificado
     if (usuario.cuentaVerificada) {
@@ -220,23 +262,40 @@ r.post("/verify-code", async (req: Request, res: Response) => {
     const expiracion = new Date(usuario.codigoExpiracion);
     
     if (ahora > expiracion) {
-      return res.status(400).json({ message: "El código de verificación ha expirado" });
+      return res.status(400).json({ 
+        message: "El código de verificación ha expirado",
+        expirado: true 
+      });
     }
 
     // Verificar el código
     if (usuario.codigoVerificacion !== codigo) {
-      return res.status(400).json({ message: "Código de verificación inválido" });
+      const nuevosIntentos = Math.max(0, intentosRestantes - 1);
+      
+      await pool.query(
+        "UPDATE USUARIOS SET intentosRestantes = ? WHERE id = ?",
+        [nuevosIntentos, usuarioId]
+      );
+
+      return res.status(400).json({ 
+        message: nuevosIntentos === 0 
+          ? "Se agotaron los intentos. Solicita un nuevo código." 
+          : "Código de verificación inválido",
+        intentosRestantes: nuevosIntentos,
+        bloqueado: nuevosIntentos === 0
+      });
     }
 
-    // Marcar como verificado y limpiar el código
     await pool.query(
-      "UPDATE USUARIOS SET cuentaVerificada = 1, codigoVerificacion = NULL, codigoExpiracion = NULL WHERE id = ?",
+      "UPDATE USUARIOS SET cuentaVerificada = 1, codigoVerificacion = NULL, codigoExpiracion = NULL, intentosRestantes = 3 WHERE id = ?",
       [usuarioId]
     );
 
     return res.json({
-      message: "Cuenta verificada exitosamente"
+      message: "Cuenta verificada exitosamente",
+      success: true
     });
+
   } catch (error) {
     console.error("verify-code error:", error);
     return res.status(500).json({
@@ -245,7 +304,6 @@ r.post("/verify-code", async (req: Request, res: Response) => {
   }
 });
 
-// ✅ NUEVO ENDPOINT: Cambiar usuario a VENDEDOR (cuando publica su primer producto)
 r.post("/cambiar-a-vendedor", async (req: Request, res: Response) => {
   try {
     const { usuarioId } = req.body;
@@ -289,6 +347,37 @@ r.post("/cambiar-a-vendedor", async (req: Request, res: Response) => {
     console.error("cambiar-a-vendedor error:", error);
     return res.status(500).json({
       message: "Error al cambiar a vendedor"
+    });
+  }
+});
+
+// ✅ NUEVO ENDPOINT: Obtener estado de verificación
+r.get("/estado-verificacion/:usuarioId", async (req: Request, res: Response) => {
+  try {
+    const { usuarioId } = req.params;
+
+    const [usuarios] = await pool.query<UserRow[]>(
+      "SELECT intentosRestantes, cuentaVerificada, codigoExpiracion FROM USUARIOS WHERE id = ? LIMIT 1",
+      [usuarioId]
+    );
+
+    if (usuarios.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const usuario = usuarios[0];
+
+    return res.json({
+      intentosRestantes: usuario.intentosRestantes ?? 3,
+      cuentaVerificada: usuario.cuentaVerificada,
+      codigoExpirado: usuario.codigoExpiracion 
+        ? new Date() > new Date(usuario.codigoExpiracion) 
+        : false
+    });
+  } catch (error) {
+    console.error("estado-verificacion error:", error);
+    return res.status(500).json({
+      message: "Error al obtener estado de verificación"
     });
   }
 });

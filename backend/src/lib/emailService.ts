@@ -18,7 +18,6 @@ export class EmailService {
       refresh_token: process.env.OAUTH_REFRESH_TOKEN
     });
 
-    // ✅ CAMBIO: Usar configuración explícita con puerto 587
     this.transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
@@ -62,7 +61,7 @@ export class EmailService {
         <body>
           <div class="container">
             <div class="header">
-              <h1>🔐 Verificación de Cuenta</h1>
+              <h1>Verificación de Cuenta</h1>
             </div>
             <div class="content">
               <p>Hola <strong>${nombre}</strong>,</p>
@@ -72,7 +71,7 @@ export class EmailService {
                 <div class="code">${codigo}</div>
               </div>
               
-              <p><strong>⏰ Este código expira en 15 minutos.</strong></p>
+              <p><strong>Este código expira en 15 minutos.</strong></p>
               <p>Si no solicitaste este código, puedes ignorar este mensaje.</p>
               
               <div class="footer">

@@ -7,13 +7,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 
 
 const Auth = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { login } = useAuth();
-  
+
   // ✅ CAMBIO: Obtener el tab desde URL params
   const tabParam = searchParams.get("tab") || "login";
   const [activeTab, setActiveTab] = useState(tabParam);
@@ -28,9 +29,25 @@ const Auth = () => {
   const [registerDireccion, setRegisterDireccion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
 
-  // ✅ CAMBIO: Login real con API
+  const validatePassword = (pass: string): boolean => {
+    const minLength = pass.length >= 8;
+    const hasUpperCase = /[A-Z]/.test(pass);
+    const hasLowerCase = /[a-z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
+
+    if (!minLength || !hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialChar) {
+      setPasswordError('La contraseña no cumple con los requisitos de seguridad');
+      return false;
+    }
+
+    setPasswordError('');
+    return true;
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -60,11 +77,11 @@ const Auth = () => {
       }
 
       const data = await response.json();
-      
+
       // ✅ Guardar token y usuario
       login(data.token, data.usuario);
       toast.success("¡Inicio de sesión exitoso!");
-      
+
       // ✅ Redirigir a homepage
       navigate("/");
     } catch (err) {
@@ -89,6 +106,11 @@ const Auth = () => {
         return;
       }
 
+      if (!validatePassword(registerPassword)) {
+        setLoading(false);
+        return;
+      }
+
       // 1️⃣ Registrar al usuario
       const response = await fetch('http://localhost:4000/api/auth/register', {
         method: 'POST',
@@ -109,8 +131,8 @@ const Auth = () => {
       }
 
       const data = await response.json();
-      const usuarioId = data.usuarioId ?? data.user?.id; 
-      
+      const usuarioId = data.usuarioId ?? data.user?.id;
+
       if (!usuarioId) {
         throw new Error("No se recibió el ID del usuario");
       }
@@ -292,6 +314,11 @@ const Auth = () => {
                     className="border-2 border-border focus:border-primary"
                     required
                   />
+
+                  <PasswordStrengthIndicator password={registerPassword} />
+                  {passwordError && (
+                    <p className="text-xs text-destructive mt-1">{passwordError}</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">

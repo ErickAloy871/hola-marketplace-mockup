@@ -10,6 +10,7 @@ export default function VerifyEmail() {
     const [success, setSuccess] = useState(false);
     const [tiempoRestante, setTiempoRestante] = useState(900);
     const [reintentosRestantes, setReintentosRestantes] = useState(3);
+    const [bloqueado, setBloqueado] = useState(false);
 
 
     const navigate = useNavigate();
@@ -43,6 +44,26 @@ export default function VerifyEmail() {
         return () => clearInterval(intervalo);
     }, [tiempoRestante]);
 
+    useEffect(() => {
+        const obtenerEstadoVerificacion = async () => {
+            if (!usuarioId) return;
+
+            try {
+                const response = await fetch(`http://localhost:4000/api/auth/estado-verificacion/${usuarioId}`);
+                const data = await response.json();
+
+                if (response.ok) {
+                    setReintentosRestantes(data.intentosRestantes ?? 3);
+                    setBloqueado(data.intentosRestantes <= 0);
+                }
+            } catch (error) {
+                console.error('Error al obtener estado:', error);
+                // Si falla, mantener el valor por defecto de 3
+            }
+        };
+
+        obtenerEstadoVerificacion();
+    }, [usuarioId]);
 
     const formatearTiempo = (segundos: number) => {
         const minutos = Math.floor(segundos / 60);
@@ -60,62 +81,57 @@ export default function VerifyEmail() {
     };
 
 
-    const verificarCodigo = async () => {
-        if (codigo.length !== 6) {
-            setError('El código debe tener 6 dígitos');
+    const handleVerificar = async () => {
+        if (bloqueado || reintentosRestantes <= 0) {
+            setError("Se agotaron los intentos. Solicita un nuevo código.");
             return;
         }
 
+        if (codigo.length !== 6) {
+            setError("El código debe tener 6 dígitos");
+            return;
+        }
 
         setLoading(true);
-        setError('');
-
+        setError(''); // ✅ Limpiar errores anteriores
 
         try {
             const response = await fetch('http://localhost:4000/api/auth/verify-code', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    usuarioId,
-                    codigo
-                })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ usuarioId, codigo })
             });
-
 
             const data = await response.json();
 
-
-            if (response.ok) {
+            if (response.ok && data.success) {
                 setSuccess(true);
-                toast.success('¡Cuenta verificada exitosamente!');
+                setError(''); // Limpiar errores
+
                 setTimeout(() => {
-                    navigate('/auth', {
-                        state: {
-                            mensaje: 'Cuenta verificada correctamente. Ahora puedes iniciar sesión.',
-                            correo: correoUsuario
-                        }
-                    });
+                    navigate('/auth');
                 }, 2000);
             } else {
-                setReintentosRestantes(prev => prev - 1);
-                setError(data.message || 'Código inválido o expirado');
-                toast.error(data.message || 'Código incorrecto');
+                // ✅ Actualizar intentos restantes
+                if (data.intentosRestantes !== undefined) {
+                    setReintentosRestantes(data.intentosRestantes);
+                }
 
-
-                if (reintentosRestantes <= 1) {
-                    setError('Se agotaron los intentos. Solicita un nuevo código.');
+                // ✅ Bloquear si se agotaron los intentos
+                if (data.bloqueado || data.intentosRestantes === 0) {
+                    setBloqueado(true);
+                } else {
+                    setError(data.message || "Código de verificación inválido");
                 }
             }
         } catch (error) {
-            console.error('Error:', error);
-            setError('Error al verificar el código. Intenta de nuevo.');
-            toast.error('Error de conexión');
+            console.error("Error:", error);
+            setError("Error de conexión. Intenta nuevamente.");
         } finally {
             setLoading(false);
         }
     };
+
 
 
     const reenviarCodigo = async () => {
@@ -141,6 +157,7 @@ export default function VerifyEmail() {
                 setCodigo('');
                 setTiempoRestante(900);
                 setReintentosRestantes(3);
+                setBloqueado(false);
                 toast.success('Código reenviado a ' + correoUsuario);
             } else {
                 setError(data.message || 'Error al reenviar el código');
@@ -154,7 +171,6 @@ export default function VerifyEmail() {
             setLoading(false);
         }
     };
-
 
     if (!usuarioId) {
         return null;
@@ -184,24 +200,13 @@ export default function VerifyEmail() {
                     // ✅ CAMBIO: Verde cohesivo con el sistema
                     <div className="bg-primary/10 border border-primary/30 rounded-md p-4">
                         <p className="text-primary text-center font-medium">
-                            ✅ Cuenta verificada correctamente
+                            Cuenta verificada correctamente
                         </p>
                         <p className="text-primary/80 text-center text-sm mt-2">
                             Redirigiendo al login...
                         </p>
                     </div>
                 )}
-
-
-                {error && (
-                    // ✅ CAMBIO: Error con color destructive del sistema
-                    <div className="bg-destructive/10 border border-destructive/30 rounded-md p-4">
-                        <p className="text-destructive text-sm">
-                            ❌ {error}
-                        </p>
-                    </div>
-                )}
-
 
                 <div className="space-y-6">
                     <div>
@@ -215,7 +220,7 @@ export default function VerifyEmail() {
                             maxLength={6}
                             value={codigo}
                             onChange={handleCodigoChange}
-                            disabled={loading || success}
+                            disabled={loading || success || bloqueado || reintentosRestantes <= 0}
                             className="appearance-none relative block w-full px-3 py-4 border-2 border-border placeholder-muted-foreground text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary text-center text-4xl tracking-widest font-bold mt-2 disabled:bg-muted disabled:opacity-50"
                             placeholder="000000"
                         />
@@ -238,11 +243,25 @@ export default function VerifyEmail() {
                         </p>
                     </div>
 
+                    {bloqueado ? (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3">
+                            <p className="text-destructive text-sm text-center font-medium">
+                                Se agotaron los intentos. Solicita un nuevo código.
+                            </p>
+                        </div>
+                    ) : error ? (
+                        <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3">
+                            <p className="text-destructive text-sm text-center font-medium">
+                                Error: {error}
+                            </p>
+                        </div>
+                    ) : null}
+
 
                     {/* ✅ CAMBIO: Botón con colores primary (turquesa) */}
                     <button
-                        onClick={verificarCodigo}
-                        disabled={loading || codigo.length !== 6 || success || tiempoRestante <= 0}
+                        onClick={handleVerificar}
+                        disabled={loading || codigo.length !== 6 || success || tiempoRestante <= 0 || bloqueado || reintentosRestantes <= 0}
                         className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:bg-muted disabled:cursor-not-allowed transition-colors duration-200"
                     >
                         {loading ? 'Verificando...' : 'Verificar Código'}
@@ -272,7 +291,8 @@ export default function VerifyEmail() {
 
                 <div className="mt-6 pt-6 border-t border-border">
                     <p className="text-xs text-muted-foreground text-center">
-                        💡 El código es válido por 15 minutos. Si no lo recibiste, revisa tu carpeta de spam o solicita uno nuevo.
+                        <strong>El código es válido por 15 minutos. Si no lo recibiste, revisa tu carpeta de spam o solicita uno nuevo.</strong>
+                        
                     </p>
                 </div>
             </div>
