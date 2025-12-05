@@ -501,4 +501,90 @@ r.post("/reset-password", async (req: Request, res: Response) => {
   }
 });
 
+// ✅ UPDATE PROFILE - Actualizar perfil del usuario
+r.put("/update-profile", async (req: Request, res: Response) => {
+  try {
+    const { usuarioId, nombre, apellido, telefono, direccion } = req.body;
+
+    if (!usuarioId) {
+      return res.status(400).json({ message: "usuarioId es requerido" });
+    }
+
+    if (!nombre || !apellido || !telefono || !direccion) {
+      return res.status(400).json({ message: "Todos los campos son requeridos" });
+    }
+
+    // Verificar que el usuario existe
+    const [usuarios] = await pool.query<UserRow[]>(
+      "SELECT id FROM USUARIOS WHERE id = ? LIMIT 1",
+      [usuarioId]
+    );
+
+    if (usuarios.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Actualizar datos del usuario
+    await pool.query(
+      "UPDATE USUARIOS SET nombre = ?, apellido = ?, telefono = ?, direccion = ? WHERE id = ?",
+      [nombre, apellido, telefono, direccion, usuarioId]
+    );
+
+    console.log(`Perfil actualizado para usuario ${usuarioId}`);
+
+    // Obtener datos actualizados con roles
+    const [usuarioActualizado] = await pool.query<UserRow[]>(
+      "SELECT id, nombre, apellido, correo FROM USUARIOS WHERE id = ? LIMIT 1",
+      [usuarioId]
+    );
+
+    const [rolesResult] = await pool.query<RolRow[]>(
+      "SELECT r.nombre FROM usuarios_roles ur JOIN roles r ON ur.rolId = r.id WHERE ur.usuarioId = ?",
+      [usuarioId]
+    );
+
+    const roles = rolesResult.map(r => r.nombre);
+
+    return res.json({
+      message: "Perfil actualizado exitosamente",
+      usuario: {
+        id: usuarioActualizado[0].id,
+        nombre: usuarioActualizado[0].nombre,
+        apellido: usuarioActualizado[0].apellido,
+        correo: usuarioActualizado[0].correo,
+        roles: roles
+      },
+      success: true
+    });
+
+  } catch (error) {
+    console.error("update-profile error:", error);
+    return res.status(500).json({
+      message: "Error al actualizar perfil"
+    });
+  }
+});
+
+// ✅ GET USER PROFILE - Obtener perfil completo
+r.get("/profile/:usuarioId", async (req: Request, res: Response) => {
+  try {
+    const { usuarioId } = req.params;
+
+    const [usuarios] = await pool.query<UserRow[]>(
+      "SELECT id, nombre, apellido, correo, telefono, direccion FROM USUARIOS WHERE id = ? LIMIT 1",
+      [usuarioId]
+    );
+
+    if (usuarios.length === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    return res.json(usuarios[0]);
+  } catch (error) {
+    console.error("get-profile error:", error);
+    return res.status(500).json({ message: "Error al obtener perfil" });
+  }
+});
+
+
 export default r;

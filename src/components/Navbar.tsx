@@ -31,7 +31,7 @@ const Navbar = () => {
   // ✅ NUEVO: Verificar si es moderador
   const isModerator = user?.roles?.includes("MODERADOR");
 
-  const isAdmin =user?.roles?.includes("ADMINISTRADOR") || user?.roles?.includes("ADMIN");
+  const isAdmin = user?.roles?.includes("ADMINISTRADOR") || user?.roles?.includes("ADMIN");
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
@@ -81,6 +81,13 @@ const Navbar = () => {
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">
                       {user?.correo}
                     </div>
+
+                    <DropdownMenuSeparator />
+
+                    <DropdownMenuItem onClick={() => navigate("/profile/edit")}>
+                      <User className="mr-2 h-4 w-4" />
+                      Editar perfil
+                    </DropdownMenuItem>
 
                     <DropdownMenuSeparator />
 

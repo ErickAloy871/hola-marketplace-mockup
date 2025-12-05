@@ -11,6 +11,7 @@ import SellDialog from "@/components/SellDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AdminDashboard from "./pages/AdminDashboard";
 import ResetPassword from "./pages/ResetPassword";
+import EditProfile from "./pages/EditProfile";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/profile/edit" element={<EditProfile />} />
         <Route path="/moderation" element={<ModerationPanel />} />
          <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/sell" element={<CreateProduct />} />
