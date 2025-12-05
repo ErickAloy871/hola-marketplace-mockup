@@ -8,6 +8,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
+import ForgotPasswordDialog from '@/components/ForgotPasswordDialog';
+
 
 
 const Auth = () => {
@@ -30,6 +32,8 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+
 
 
   const validatePassword = (pass: string): boolean => {
@@ -246,6 +250,7 @@ const Auth = () => {
                 </Button>
                 <button
                   type="button"
+                  onClick={() => setShowForgotPassword(true)}
                   className="w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors"
                 >
                   ¿Recuperar Contraseña?
@@ -363,6 +368,10 @@ const Auth = () => {
           </Tabs>
         </div>
       </div>
+      <ForgotPasswordDialog
+        open={showForgotPassword}
+        onOpenChange={setShowForgotPassword}
+      />
     </div>
   );
 };

@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { sign, verifyJwt, JWTPayload } from "../lib/jwt.js";
 import type { RowDataPacket } from "mysql2";
 import { GmailService } from "../lib/gmailService.js";
+import crypto from 'crypto';
 
 function validatePasswordStrength(password: string): { valid: boolean; message?: string } {
   const minLength = 8;
@@ -378,6 +379,124 @@ r.get("/estado-verificacion/:usuarioId", async (req: Request, res: Response) => 
     console.error("estado-verificacion error:", error);
     return res.status(500).json({
       message: "Error al obtener estado de verificación"
+    });
+  }
+});
+
+// ✅ FORGOT PASSWORD - Solicitar reseteo
+r.post("/forgot-password", async (req: Request, res: Response) => {
+  try {
+    const { correo } = req.body;
+
+    if (!correo) {
+      return res.status(400).json({ message: "El correo es requerido" });
+    }
+
+    // Buscar usuario
+    const [usuarios] = await pool.query<UserRow[]>(
+      "SELECT id, nombre, correo FROM USUARIOS WHERE correo = ? LIMIT 1",
+      [correo]
+    );
+
+    // ✅ Por seguridad, siempre respondemos lo mismo (aunque no exista)
+    if (usuarios.length === 0) {
+      return res.json({
+        message: "Si el correo existe, recibirás un enlace de recuperación"
+      });
+    }
+
+    const usuario = usuarios[0];
+
+    // Generar token único
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    
+    // Expira en 1 hora
+    const expiracion = new Date();
+    expiracion.setHours(expiracion.getHours() + 1);
+
+    // Guardar token en BD
+    await pool.query(
+      "UPDATE USUARIOS SET resetToken = ?, resetTokenExpiracion = ? WHERE id = ?",
+      [resetToken, expiracion, usuario.id]
+    );
+
+    // Enviar email
+    const gmailService = new GmailService();
+    await gmailService.enviarLinkRecuperacion(
+      usuario.correo,
+      usuario.nombre,
+      resetToken
+    );
+
+    console.log(`Link de recuperación enviado a ${usuario.correo}`);
+
+    return res.json({
+      message: "Si el correo existe, recibirás un enlace de recuperación"
+    });
+
+  } catch (error) {
+    console.error("forgot-password error:", error);
+    return res.status(500).json({
+      message: "Error al procesar la solicitud"
+    });
+  }
+});
+
+// ✅ RESET PASSWORD - Cambiar contraseña
+r.post("/reset-password", async (req: Request, res: Response) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: "Token y contraseña son requeridos" });
+    }
+
+    // Validar fortaleza de contraseña
+    const passwordValidation = validatePasswordStrength(newPassword);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ message: passwordValidation.message });
+    }
+
+    // Buscar usuario con el token
+    const [usuarios] = await pool.query<UserRow[]>(
+      "SELECT id, resetToken, resetTokenExpiracion FROM USUARIOS WHERE resetToken = ? LIMIT 1",
+      [token]
+    );
+
+    if (usuarios.length === 0) {
+      return res.status(400).json({ message: "Token inválido o expirado" });
+    }
+
+    const usuario = usuarios[0];
+
+    // Verificar expiración
+    const ahora = new Date();
+    const expiracion = usuario.resetTokenExpiracion ? new Date(usuario.resetTokenExpiracion) : null;
+
+    if (!expiracion || ahora > expiracion) {
+      return res.status(400).json({ message: "El token ha expirado" });
+    }
+
+    // Hash de la nueva contraseña
+    const hash = await bcrypt.hash(newPassword, 10);
+
+    // Actualizar contraseña y limpiar token
+    await pool.query(
+      "UPDATE USUARIOS SET passwordHash = ?, resetToken = NULL, resetTokenExpiracion = NULL WHERE id = ?",
+      [hash, usuario.id]
+    );
+
+    console.log(`Contraseña actualizada para usuario ${usuario.id}`);
+
+    return res.json({
+      message: "Contraseña actualizada exitosamente",
+      success: true
+    });
+
+  } catch (error) {
+    console.error("reset-password error:", error);
+    return res.status(500).json({
+      message: "Error al actualizar contraseña"
     });
   }
 });

@@ -10,6 +10,7 @@ import CreateProduct from "./pages/CreateProduct";
 import SellDialog from "@/components/SellDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AdminDashboard from "./pages/AdminDashboard";
+import ResetPassword from "./pages/ResetPassword";
 
 export default function App() {
   return (
@@ -21,7 +22,8 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/product/:id" element={<ProductDetail />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
-        <Route path="/moderation" element={<ModerationPanel />} /> {/* ✅ NUEVO */}
+        <Route path="/reset-password/:token" element={<ResetPassword />} />
+        <Route path="/moderation" element={<ModerationPanel />} />
          <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/sell" element={<CreateProduct />} />
         <Route path="*" element={<NotFound />} />
