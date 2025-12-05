@@ -167,6 +167,7 @@ export class GmailService {
               font-size: 16px;">Restablecer Contraseña</a>
             </div>
             
+            
             <p class="expiry-info">Este enlace expira en 1 hora</p>
             
             <div class="note">
