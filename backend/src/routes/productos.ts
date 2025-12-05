@@ -1,11 +1,12 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db.js";
 import type { RowDataPacket } from "mysql2";
-import { verifyToken, blockModerator } from "../middleware/roleMiddleware.js"; // ✅ NUEVO
+import { verifyToken, blockModerator } from "../middleware/roleMiddleware.js";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { validateProduct, getValidationMessage } from "../utils/productValidator.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,14 +41,9 @@ type CountRow = RowDataPacket & { total: number };
 
 const r = Router();
 
-/* =============================
-   � GET /categorias → listar categorías activas
-   ============================= */
 r.get("/categorias", async (_req: Request, res: Response) => {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(
-      // La tabla de categorías puede usar la columna 'estado' (valor 'ACTIVA').
-      // Consultamos por esa columna para mayor compatibilidad con la base de datos actual.
       "SELECT id, nombre FROM CATEGORIAS WHERE estado = 'ACTIVA' ORDER BY nombre ASC"
     );
     res.json(rows);
@@ -57,9 +53,6 @@ r.get("/categorias", async (_req: Request, res: Response) => {
   }
 });
 
-/* =============================
-   �📦 GET /productos → listar productos
-   ============================= */
 r.get("/", async (req: Request, res: Response) => {
   try {
     const { q, categoria, minPrecio, maxPrecio, page = "1", pageSize = "12" } =
@@ -124,9 +117,6 @@ r.get("/", async (req: Request, res: Response) => {
   }
 });
 
-/* =============================
-   🛒 GET /productos/:id → obtener un producto
-   ============================= */
 r.get("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
 
@@ -172,10 +162,7 @@ r.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-/* =============================
-   ✅ NUEVO: POST /productos → crear producto
-   Solo VENDEDORES pueden crear productos (NO moderadores)
-   ============================= */
+
 r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: Request, res: Response) => {
   try {
     // 🔍 DEBUG: Ver qué llegó al servidor
@@ -226,24 +213,65 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       }
     }
 
-    // Crear la publicación con estado PENDIENTE
+    // =============================
+    // ✅ VALIDACIÓN AUTOMÁTICA (ANTES DE INSERTAR)
+    // =============================
+    const files = (req as any).files as any[] | undefined;
+    const hasImages: boolean = files !== undefined && files.length > 0;
+
+    const validationResult = validateProduct(
+      nombre,
+      descripcion || '',
+      Number(precio),
+      hasImages
+    );
+
+    console.log(getValidationMessage(validationResult));
+
+    // Determinar estado inicial
+    let estadoInicial = 'PENDIENTE';
+    let razonRechazo = null;
+
+    if (validationResult.autoReject) {
+      estadoInicial = 'RECHAZADA';
+      razonRechazo = validationResult.reasons.join('. ');
+    } else if (validationResult.score >= 80) {
+      estadoInicial = 'PUBLICADA'; // Auto-aprobación si score > 80
+    }
+
+    // =============================
+    // ✅ CREAR LA PUBLICACIÓN (UNA SOLA VEZ)
+    // =============================
     const [result] = await pool.query(
-      `INSERT INTO PUBLICACIONES (nombre, descripcion, precio, ubicacion, categoriaId, usuarioId, estado, fechaPublicacion)
-       VALUES (?, ?, ?, ?, ?, ?, 'PENDIENTE', NOW())`,
-      [nombre, descripcion, precio, finalUbicacion, finalCategoriaId, usuarioId]
+      `INSERT INTO PUBLICACIONES (
+        nombre, descripcion, precio, ubicacion, categoriaId, usuarioId, 
+        estado, razonRechazo, puntuacionCalidad, validacionAutomatica, fechaPublicacion
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
+      [
+        nombre,
+        descripcion,
+        precio,
+        finalUbicacion,
+        finalCategoriaId,
+        usuarioId,
+        estadoInicial,
+        razonRechazo,
+        validationResult.score
+      ]
     );
 
     const publicacionId = (result as any).insertId;
-    console.log(`📦 Publicación insertada con ID: ${publicacionId}`);
+    console.log(`📦 Publicación insertada con ID: ${publicacionId} - Estado: ${estadoInicial} - Score: ${validationResult.score}/100`);
 
-    // Si se subieron imágenes, guardarlas en la tabla fotos_publicacion
-    const files = (req as any).files as any[] | undefined;
-    let imagenesGuardadas = 0;
-    
+    // =============================
+    // ✅ GUARDAR IMÁGENES
+    // =============================
+    let imagenesGuardadas = 0; // ✅ Definir variable
+
     if (files && files.length > 0) {
       const baseUrl = `${req.protocol}://${req.get("host")}`;
       console.log(`📸 Procesando ${files.length} imagen(es)...`);
-      
+
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const urlFoto = `${baseUrl}/uploads/${f.filename}`;
@@ -263,17 +291,33 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       console.log('ℹ️ No se subieron imágenes con esta publicación');
     }
 
+    // =============================
+    // ✅ RESPUESTA AL CLIENTE (UNA SOLA VEZ)
+    // =============================
+    let mensaje = "Publicación creada exitosamente";
+    if (estadoInicial === 'RECHAZADA') {
+      mensaje = "Publicación rechazada automáticamente";
+    } else if (estadoInicial === 'PENDIENTE') {
+      mensaje = "Publicación creada. Pendiente de aprobación manual";
+    } else if (estadoInicial === 'PUBLICADA') {
+      mensaje = "Publicación creada y aprobada automáticamente";
+    }
+
     console.log(`✅ Nueva publicación creada: ${publicacionId} por vendedor ${usuarioId}`);
 
-    res.status(201).json({
-      message: "Publicación creada exitosamente. Pendiente de aprobación",
+    return res.status(estadoInicial === 'RECHAZADA' ? 400 : 201).json({
+      message: mensaje,
       publicacionId,
-      imagenesGuardadas
+      imagenesGuardadas,
+      estado: estadoInicial,
+      score: validationResult.score,
+      razones: validationResult.reasons.length > 0 ? validationResult.reasons : undefined
     });
+
   } catch (error: any) {
     console.error("❌ Error al crear publicación:", error);
     console.error("Stack trace:", error.stack);
-    res.status(500).json({ 
+    return res.status(500).json({
       message: "Error interno del servidor",
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
