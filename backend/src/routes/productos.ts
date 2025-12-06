@@ -7,6 +7,8 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import { validateProduct, getValidationMessage } from "../utils/productValidator.js";
+import { requireVendedor } from "../middleware/requireVendedor.js";
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -40,6 +42,9 @@ type ProductoRow = RowDataPacket & {
 type CountRow = RowDataPacket & { total: number };
 
 const r = Router();
+
+
+
 
 r.get("/categorias", async (_req: Request, res: Response) => {
   try {
@@ -131,6 +136,308 @@ r.get("/", async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
+
+// ===============================
+// 1. OBTENER MIS PRODUCTOS
+// ===============================
+r.get("/mis-productos", verifyToken, requireVendedor, async (req, res) => {
+  try {
+    const usuarioId = req.user?.id;
+
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `
+      SELECT 
+        P.id, P.nombre, P.descripcion, P.precio, P.ubicacion,
+        P.tipo, P.estado, P.disponibilidad,
+        C.nombre AS categoriaNombre,
+
+        (SELECT urlFoto FROM fotos_publicacion 
+         WHERE publicacionId = P.id 
+         ORDER BY orden ASC LIMIT 1) AS foto,
+
+        EXISTS(
+          SELECT 1 FROM apelaciones_publicacion
+          WHERE publicacionId = P.id 
+          AND usuarioId = ?
+        ) AS apelacionEnviada
+
+      FROM PUBLICACIONES P
+      JOIN CATEGORIAS C ON C.id = P.categoriaId
+      WHERE P.usuarioId = ?
+      ORDER BY P.fechaPublicacion DESC
+      `,
+      [usuarioId, usuarioId]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error mis productos:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+
+// ===============================
+// 2. CAMBIAR VISIBILIDAD
+// ===============================
+r.patch("/:id/visibilidad", verifyToken, requireVendedor, async (req: Request, res: Response) => {
+  try {
+    const usuarioId = req.user?.id;
+    const { id } = req.params;
+    const { visible } = req.body;
+
+    await pool.query(
+      "UPDATE PUBLICACIONES SET disponibilidad = ? WHERE id = ? AND usuarioId = ?",
+      [visible ? 1 : 0, id, usuarioId]
+    );
+
+    res.json({ message: "Visibilidad actualizada" });
+  } catch (error) {
+    console.error("Error cambiando visibilidad:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+// ===============================
+// 3. ELIMINAR PRODUCTO
+// ===============================
+r.delete("/:id", verifyToken, requireVendedor, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = req.user?.id;
+
+    const [pub] = await pool.query<RowDataPacket[]>(
+      "SELECT estado FROM PUBLICACIONES WHERE id = ? AND usuarioId = ?",
+      [id, usuarioId]
+    );
+
+    if (!pub.length) return res.status(403).json({ message: "No autorizado" });
+
+    if (pub[0].estado === "RESTRINGIDA") {
+      return res.status(400).json({ message: "No puedes eliminar un producto restringido" });
+    }
+
+    await pool.query("DELETE FROM PUBLICACIONES WHERE id = ?", [id]);
+
+    res.json({ message: "Producto eliminado" });
+  } catch (error) {
+    console.error("Error al eliminar:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+// ===============================
+// 4. APELAR RESTRICCIÓN
+// ===============================
+// ===============================
+// 4. APELAR RESTRICCIÓN (versión final)
+// ===============================
+r.post("/:id/apelar", verifyToken, requireVendedor, async (req: Request, res: Response) => {
+  try {
+    const usuarioId = req.user?.id;
+    const { id } = req.params;
+    const { motivo } = req.body;
+
+    if (!motivo || motivo.trim().length < 5) {
+      return res.status(400).json({ message: "El motivo es demasiado corto" });
+    }
+
+    // 1️⃣ Verificar que la publicación sea del usuario
+    const [pub] = await pool.query<RowDataPacket[]>(
+      "SELECT estado FROM PUBLICACIONES WHERE id = ? AND usuarioId = ?",
+      [id, usuarioId]
+    );
+
+    if (!pub.length)
+      return res.status(403).json({ message: "No autorizado" });
+
+    // 2️⃣ Solo se puede apelar si está DADO_DE_BAJA
+    if (pub[0].estado !== "DADO_DE_BAJA") {
+      return res.status(400).json({ message: "El producto no está dado de baja" });
+    }
+
+    // 3️⃣ Verificar si ya apeló antes
+    const [yaApelo] = await pool.query<RowDataPacket[]>(
+      "SELECT id FROM apelaciones_publicacion WHERE publicacionId = ? AND usuarioId = ? LIMIT 1",
+      [id, usuarioId]
+    );
+
+    if (yaApelo.length > 0) {
+      return res.status(400).json({ message: "Ya enviaste una apelación para este producto" });
+    }
+
+    // 4️⃣ Registrar apelación
+    await pool.query(
+      `INSERT INTO apelaciones_publicacion (publicacionId, usuarioId, motivo, estado, fechaCreacion)
+       VALUES (?, ?, ?, 'PENDIENTE', NOW())`,
+      [id, usuarioId, motivo]
+    );
+
+    res.json({ message: "Apelación enviada correctamente" });
+
+  } catch (error) {
+    console.error("Error en apelación:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+
+
+
+// ===============================
+// 5. OBTENER FOTOS DEL PRODUCTO
+// ===============================
+r.get("/:id/fotos", verifyToken, requireVendedor, async (req: Request, res: Response) => {
+  try {
+    const usuarioId = req.user?.id;
+    const { id } = req.params;
+
+    const [pub] = await pool.query<RowDataPacket[]>(
+      "SELECT id FROM PUBLICACIONES WHERE id = ? AND usuarioId = ?",
+      [id, usuarioId]
+    );
+
+    if (!pub.length) return res.status(403).json({ message: "No autorizado" });
+
+    const [fotos] = await pool.query<RowDataPacket[]>(
+      "SELECT id, urlFoto, orden FROM fotos_publicacion WHERE publicacionId = ? ORDER BY orden ASC",
+      [id]
+    );
+
+    res.json(fotos);
+  } catch (error) {
+    console.error("Error fotos:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+
+
+// ===============================
+// 6. SUBIR FOTOS AL PRODUCTO (CORREGIDO)
+// ===============================
+r.post("/:id/fotos", verifyToken, requireVendedor, upload.array("images", 5), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = req.user?.id;
+    const files = req.files as Express.Multer.File[];
+
+    // Validar que la publicación pertenece al usuario
+    const [pub] = await pool.query<RowDataPacket[]>(
+      "SELECT id FROM PUBLICACIONES WHERE id = ? AND usuarioId = ?",
+      [id, usuarioId]
+    );
+    if (!pub.length) return res.status(403).json({ message: "No autorizado" });
+    if (!files.length) return res.status(400).json({ message: "No se subió ninguna imagen" });
+
+    // Obtener el último orden existente
+    const [last] = await pool.query<RowDataPacket[]>(
+      "SELECT MAX(orden) AS maxOrden FROM fotos_publicacion WHERE publicacionId = ?",
+      [id]
+    );
+
+    let nextOrder = (last[0]?.maxOrden || 0) + 1;
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+    for (const file of files) {
+      const url = `${baseUrl}/uploads/${file.filename}`;
+
+      await pool.query(
+        "INSERT INTO fotos_publicacion (publicacionId, urlFoto, orden) VALUES (?, ?, ?)",
+        [id, url, nextOrder]
+      );
+
+      nextOrder++; // incrementa el orden para cada foto
+    }
+
+    res.json({ message: "Imágenes subidas correctamente" });
+  } catch (error) {
+    console.error("Error subiendo fotos:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+
+// ===============================
+// 7. ELIMINAR FOTO (VERSION FINAL)
+// ===============================
+r.delete("/fotos/:fotoId", verifyToken, requireVendedor, async (req, res) => {
+  try {
+    const { fotoId } = req.params;
+    const userId = Number(req.user?.id);
+
+    // Obtener foto + validar propiedad
+    const [foto] = await pool.query<RowDataPacket[]>(`
+      SELECT f.id, f.urlFoto, f.publicacionId, P.usuarioId
+      FROM fotos_publicacion f
+      JOIN PUBLICACIONES P ON P.id = f.publicacionId
+      WHERE f.id = ?
+    `, [fotoId]);
+
+    if (!foto.length) {
+      return res.status(404).json({ message: "Foto no encontrada" });
+    }
+
+    const propietario = Number(foto[0].usuarioId);
+
+    if (propietario !== userId) {
+      console.log("⛔ Usuario no autorizado para eliminar esta foto");
+      return res.status(403).json({ message: "No autorizado" });
+    }
+
+    // Eliminar registro
+    await pool.query("DELETE FROM fotos_publicacion WHERE id = ?", [fotoId]);
+
+    console.log(`✅ Foto eliminada correctamente: ${fotoId}`);
+
+    res.json({ message: "Foto eliminada" });
+
+  } catch (error) {
+    console.error("🔥 ERROR AL ELIMINAR FOTO:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+
+
+// ===============================
+//  EDITAR PRODUCTO
+// ===============================
+r.patch("/:id", verifyToken, requireVendedor, async (req, res) => {
+  try {
+    const usuarioId = req.user?.id;
+    const { id } = req.params;
+
+    const { nombre, descripcion, precio, ubicacion } = req.body;
+
+    // Verificar propiedad
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT id FROM PUBLICACIONES WHERE id = ? AND usuarioId = ?",
+      [id, usuarioId]
+    );
+
+    if (!rows.length)
+      return res.status(403).json({ message: "No autorizado" });
+
+    await pool.query(
+      `UPDATE PUBLICACIONES SET 
+        nombre = ?, 
+        descripcion = ?, 
+        precio = ?, 
+        ubicacion = ?
+       WHERE id = ?`,
+      [nombre, descripcion, precio, ubicacion, id]
+    );
+
+    res.json({ message: "Producto actualizado correctamente" });
+  } catch (error) {
+    console.error("Error actualizando producto:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+
 
 r.get("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
@@ -321,5 +628,9 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
     });
   }
 });
+
+
+
+
 
 export default r;

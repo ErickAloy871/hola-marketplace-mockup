@@ -14,6 +14,7 @@ import ResetPassword from "./pages/ResetPassword";
 import EditProfile from "./pages/EditProfile";
 import MisIntereses from "./pages/MisIntereses";
 import MessagesPage from "./pages/Messages";
+import MisProductos from "./pages/MisProductos";
 
 export default function App() {
   return (
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="/create-product" element={<CreateProduct />} />
         <Route path="/mis-intereses" element={<MisIntereses />} />
         <Route path="/mensajes" element={<MessagesPage />} />
+        <Route path="/mis-productos" element={<MisProductos />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </TooltipProvider>

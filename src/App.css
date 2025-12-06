@@ -40,3 +40,44 @@
 .read-the-docs {
   color: #888;
 }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  width: 400px;
+}
+
+.modal-content.large {
+  width: 600px;
+}
+
+.fotos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.foto-item img {
+  width: 100%;
+  border-radius: 6px;
+}
+
+.borrar {
+  background: red;
+  color: white;
+  border: none;
+  padding: 6px;
+  width: 100%;
+  margin-top: 6px;
+  border-radius: 4px;
+}

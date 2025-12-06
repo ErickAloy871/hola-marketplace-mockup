@@ -14,6 +14,18 @@ export async function api(path: string, opts: RequestInit = {}) {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+export async function apiUpload(path: string, formData: FormData) {
+  const token = localStorage.getItem("token");
+
+  const res = await fetch(API + path, {
+    method: "POST",
+    body: formData,   // 👈 sin headers JSON
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
 
 export const authApi = {
   login: async (correo: string, password: string) => {
