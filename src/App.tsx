@@ -12,6 +12,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import AdminDashboard from "./pages/AdminDashboard";
 import ResetPassword from "./pages/ResetPassword";
 import EditProfile from "./pages/EditProfile";
+import MisIntereses from "./pages/MisIntereses"; // ✅ NUEVO
 
 export default function App() {
   return (
@@ -26,8 +27,10 @@ export default function App() {
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/profile/edit" element={<EditProfile />} />
         <Route path="/moderation" element={<ModerationPanel />} />
-         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/sell" element={<CreateProduct />} />
+        <Route path="/create-product" element={<CreateProduct />} />
+        <Route path="/mis-intereses" element={<MisIntereses />} /> {/* ✅ NUEVO */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </TooltipProvider>

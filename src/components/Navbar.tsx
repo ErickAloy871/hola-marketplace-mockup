@@ -1,4 +1,4 @@
-import { ShoppingCart, User, LogOut, Shield } from "lucide-react"; // ✅ Agregar Shield
+import { ShoppingCart, User, LogOut, Shield, PlusCircle, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -7,7 +7,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator, // ✅ NUEVO
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 function getDisplayRole(roles: string[]) {
@@ -28,10 +28,10 @@ const Navbar = () => {
     navigate("/");
   };
 
-  // ✅ NUEVO: Verificar si es moderador
   const isModerator = user?.roles?.includes("MODERADOR");
-
   const isAdmin = user?.roles?.includes("ADMINISTRADOR") || user?.roles?.includes("ADMIN");
+  const isVendedor = user?.roles?.includes("VENDEDOR");
+  const isComprador = user?.roles?.includes("COMPRADOR");
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
@@ -66,7 +66,6 @@ const Navbar = () => {
                   {getDisplayRole(user.roles)}
                 </span>
 
-
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="icon" className="relative">
@@ -89,9 +88,34 @@ const Navbar = () => {
                       Editar perfil
                     </DropdownMenuItem>
 
+                    {/* ✅ NUEVO: Opción "Me Interesa" solo para COMPRADOR y VENDEDOR */}
+                    {(isComprador || isVendedor) && !isAdmin && !isModerator && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => navigate("/mis-intereses")}>
+                          <Heart className="mr-2 h-4 w-4 text-red-500" />
+                          <span>Me Interesa</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
+                    {/* ✅ CORREGIDO: Botón para publicar producto (SOLO compradores/vendedores) */}
+                    {(isVendedor || isComprador) && !isAdmin && !isModerator && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => navigate("/create-product")}
+                          className="text-green-600 font-medium"
+                        >
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Publicar producto
+                        </DropdownMenuItem>
+                      </>
+                    )}
+
                     <DropdownMenuSeparator />
 
-                    {/* ✅ Panel de Administrador: SOLO si es ADMIN */}
+                    {/* Panel de Administrador: SOLO si es ADMIN */}
                     {isAdmin && (
                       <DropdownMenuItem onClick={() => navigate("/admin")}>
                         <Shield className="mr-2 h-4 w-4 text-emerald-600" />
@@ -99,7 +123,7 @@ const Navbar = () => {
                       </DropdownMenuItem>
                     )}
 
-                    {/* ✅ Panel de Moderación: SOLO si es moderador y NO es admin */}
+                    {/* Panel de Moderación: SOLO si es moderador y NO es admin */}
                     {!isAdmin && isModerator && (
                       <DropdownMenuItem onClick={() => navigate("/moderation")}>
                         <Shield className="mr-2 h-4 w-4 text-blue-600" />
@@ -107,8 +131,7 @@ const Navbar = () => {
                       </DropdownMenuItem>
                     )}
 
-
-                    {/* ✅ Ocultar "Empezar a vender" para moderadores y administradores */}
+                    {/* Ocultar "Empezar a vender" para moderadores y administradores */}
                     {!isModerator &&
                       !isAdmin &&
                       user?.roles?.includes("COMPRADOR") &&

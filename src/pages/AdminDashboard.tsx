@@ -13,7 +13,34 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  Flag,
+  Eye,
+  Trash2,
 } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import SuccessModal from "@/components/ui/SuccessModal";
 import ConfirmModal from "@/components/ui/ConfirmModal";
@@ -21,6 +48,7 @@ import ErrorModal from "@/components/ui/ErrorModal";
 import WarningModal from "@/components/ui/WarningModal";
 
 import { useAuth } from "@/hooks/useAuth";
+import { reportesApi } from "@/lib/api";
 
 const API = "http://localhost:4000/api/admin";
 
@@ -35,6 +63,30 @@ interface AdminUser {
   cuentaVerificada?: 0 | 1 | boolean;
   fechaCreacion?: string;
 }
+
+interface Reporte {
+  id: number;
+  publicacionId: number;
+  publicacionNombre: string;
+  publicacionPrecio: number;
+  categoria: string;
+  motivo: string | null;
+  estado: "PENDIENTE" | "REVISADO" | "RESUELTO";
+  fechaReporte: string;
+  reportadoPor: string;
+  reportadoPorCorreo: string;
+  revisadoPorNombre: string | null;
+}
+
+const categoriaLabels: Record<string, string> = {
+  ESTAFA: "Estafa",
+  ARTICULOS_RESTRINGIDOS: "Artículos restringidos",
+  ANUNCIOS_IMPRECISOS: "Anuncios imprecisos",
+  DESNUDOS_ACTIVIDAD_SEXUAL: "Desnudos o actividad sexual",
+  VIOLENCIA_ODIO_EXPLOTACION: "Violencia, odio o explotación",
+  BULLYING_ACOSO: "Bullying o acoso",
+  SUICIDIO_AUTOLESION: "Suicidio o autolesión"
+};
 
 const AdminPanel = () => {
   const { user, isAuthenticated, loading } = useAuth();
@@ -52,17 +104,25 @@ const AdminPanel = () => {
   // Datos
   const [moderadores, setModeradores] = useState<AdminUser[]>([]);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState<AdminUser[]>([]);
+  const [publicacionesConfig, setPublicacionesConfig] = useState<any[]>([]);
+  
+  // ✅ NUEVO: Estados para reportes
+  const [reportes, setReportes] = useState<Reporte[]>([]);
+  const [filtroEstado, setFiltroEstado] = useState<string>("TODOS");
+  const [selectedReporte, setSelectedReporte] = useState<Reporte | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    tipo: "eliminar-reporte" | "eliminar-publicacion" | null;
+    reporteId: number | null;
+  }>({ open: false, tipo: null, reporteId: null });
 
   const [loadingData, setLoadingData] = useState(true);
-
-    const [publicacionesConfig, setPublicacionesConfig] = useState<any[]>([]);
-
-
 
   // Modales
   const [successModal, setSuccessModal] = useState<any>(null);
   const [errorModal, setErrorModal] = useState<any>(null);
-  const [confirmModal, setConfirmModal] = useState<any>(null);
+  const [confirmModalOld, setConfirmModalOld] = useState<any>(null);
 
   const token = localStorage.getItem("token");
 
@@ -95,29 +155,29 @@ const AdminPanel = () => {
       });
       setUsuariosDisponibles(await usuariosRes.json());
 
+      // 3. Publicaciones para configuración
+      const pubsRes = await fetch(`${API}/publicaciones-configuracion`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const pubsJson = await pubsRes.json();
+      setPublicacionesConfig(Array.isArray(pubsJson) ? pubsJson : []);
 
-      // ✅ Publicaciones para configuración
-    const pubsRes = await fetch(`${API}/publicaciones-configuracion`, {
-            headers: { Authorization: `Bearer ${token}` },
-            });
-            const pubsJson = await pubsRes.json();
-            console.log("publicaciones-configuracion:", pubsJson); // 👈 para debug
-            setPublicacionesConfig(Array.isArray(pubsJson) ? pubsJson : []);
-        } catch (e) {
-            console.error(e);
-            setErrorModal({
-            title: "Error al cargar datos",
-            message: "No se pudo conectar con el servidor.",
-            });
-        } finally {
-            setLoadingData(false);
-        }
+      // ✅ 4. NUEVO: Cargar reportes
+      const reportesData = await reportesApi.getAll();
+      setReportes(reportesData);
+    } catch (e) {
+      console.error(e);
+      setErrorModal({
+        title: "Error al cargar datos",
+        message: "No se pudo conectar con el servidor.",
+      });
+    } finally {
+      setLoadingData(false);
+    }
   };
 
   // =====================================================
   // 🔵 Registrar moderador
-  //    (recuerda que en backend ya quitamos COMPRADOR/VENDEDOR
-  //     y añadimos solo MODERADOR)
   // =====================================================
   const registrarModerador = async (id: number) => {
     try {
@@ -197,10 +257,10 @@ const AdminPanel = () => {
   };
 
   // =====================================================
-  // ❌ Eliminar rol de moderador (y en backend vuelve a comprador+vendedor)
+  // ❌ Eliminar rol de moderador
   // =====================================================
   const eliminarRol = async (id: number) => {
-    setConfirmModal({
+    setConfirmModalOld({
       title: "Eliminar rol de moderador",
       message: "¿Estás seguro de eliminar este rol? El usuario volverá a ser comprador y vendedor.",
       onConfirm: async () => {
@@ -227,40 +287,113 @@ const AdminPanel = () => {
   };
 
   const actualizarTiempo = async (id: number, dias: number) => {
-  if (!dias || dias < 1) {
-    return setErrorModal({
-      title: "Valor inválido",
-      message: "Debe ingresar un número de días mayor a 0",
-    });
-  }
+    if (!dias || dias < 1) {
+      return setErrorModal({
+        title: "Valor inválido",
+        message: "Debe ingresar un número de días mayor a 0",
+      });
+    }
 
-  try {
-    await fetch(`${API}/publicaciones/${id}/tiempo-publicacion`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ dias }),
-    });
+    try {
+      await fetch(`${API}/publicaciones/${id}/tiempo-publicacion`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ dias }),
+      });
 
-    setSuccessModal({
-      title: "Tiempo actualizado",
-      message: "El tiempo máximo de publicación fue actualizado.",
-    });
+      setSuccessModal({
+        title: "Tiempo actualizado",
+        message: "El tiempo máximo de publicación fue actualizado.",
+      });
 
-    loadData();
-  } catch (e) {
-    console.error(e);
-    setErrorModal({
-      title: "Error",
-      message: "No se pudo actualizar el tiempo.",
-    });
-  }
-};
+      loadData();
+    } catch (e) {
+      console.error(e);
+      setErrorModal({
+        title: "Error",
+        message: "No se pudo actualizar el tiempo.",
+      });
+    }
+  };
 
+  // =====================================================
+  // ✅ NUEVO: Funciones para gestión de reportes
+  // =====================================================
+  const handleVerDetalle = (reporte: Reporte) => {
+    setSelectedReporte(reporte);
+    setDialogOpen(true);
+  };
 
+  const handleMarcarRevisado = async (id: number) => {
+    try {
+      await reportesApi.marcarRevisado(id);
+      setSuccessModal({
+        title: "Reporte revisado",
+        description: "El reporte ha sido marcado como revisado"
+      });
+      loadData();
+    } catch (error) {
+      setErrorModal({
+        title: "Error",
+        message: "No se pudo marcar el reporte como revisado",
+      });
+    }
+  };
 
+  const handleEliminarReporte = async (id: number) => {
+    try {
+      await reportesApi.eliminar(id);
+      setSuccessModal({
+        title: "Reporte eliminado",
+        message: "El reporte ha sido eliminado sin afectar la publicación"
+      });
+      setConfirmDialog({ open: false, tipo: null, reporteId: null });
+      loadData();
+    } catch (error) {
+      setErrorModal({
+        title: "Error",
+        message: "No se pudo eliminar el reporte",
+      });
+    }
+  };
+
+  const handleEliminarPublicacion = async (id: number) => {
+    try {
+      await reportesApi.eliminarPublicacion(id);
+      setSuccessModal({
+        title: "Publicación eliminada",
+        message: "La publicación y todos sus reportes han sido eliminados"
+      });
+      setConfirmDialog({ open: false, tipo: null, reporteId: null });
+      loadData();
+    } catch (error) {
+      setErrorModal({
+        title: "Error",
+        message: "No se pudo eliminar la publicación",
+      });
+    }
+  };
+
+  const reportesFiltrados = reportes.filter((r) => {
+    if (filtroEstado === "TODOS") return true;
+    return r.estado === filtroEstado;
+  });
+
+  const getEstadoBadge = (estado: string) => {
+    const variants: Record<string, any> = {
+      PENDIENTE: "destructive",
+      REVISADO: "default",
+      RESUELTO: "secondary"
+    };
+    return (
+      <Badge variant={variants[estado] || "default"}>
+        {estado}
+      </Badge>
+    );
+  };
 
   if (loadingData)
     return (
@@ -322,7 +455,7 @@ const AdminPanel = () => {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            Reportes
+            Reportes ({reportes.filter(r => r.estado === "PENDIENTE").length})
           </button>
 
           <button
@@ -540,118 +673,273 @@ const AdminPanel = () => {
             TAB: CONFIGURACIÓN
         ===================================================== */}
         {activeTab === "configuracion" && (
-            <>
-                <h2 className="text-2xl font-semibold mb-4">
-                Configurar tiempo de publicación por publicación
-                </h2>
+          <>
+            <h2 className="text-2xl font-semibold mb-4">
+              Configurar tiempo de publicación por publicación
+            </h2>
 
-                {publicacionesConfig.length === 0 ? (
-                <Card>
-                    <CardContent className="py-10 text-center text-muted-foreground">
-                    No hay publicaciones registradas.
+            {publicacionesConfig.length === 0 ? (
+              <Card>
+                <CardContent className="py-10 text-center text-muted-foreground">
+                  No hay publicaciones registradas.
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {publicacionesConfig.map((p) => (
+                  <Card key={p.id} className="overflow-hidden shadow">
+                    {/* Imagen */}
+                    <CardHeader className="p-0">
+                      {p.urlFoto ? (
+                        <img
+                          src={
+                            p.urlFoto.startsWith("http")
+                              ? p.urlFoto
+                              : `http://localhost:4000${p.urlFoto}`
+                          }
+                          alt={p.nombre}
+                          className="w-full h-44 object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-44 bg-gray-200 flex items-center justify-center text-gray-500">
+                          Sin imagen
+                        </div>
+                      )}
+                    </CardHeader>
+
+                    {/* Contenido */}
+                    <CardContent className="p-4 space-y-3 text-sm">
+                      <h3 className="font-semibold text-lg">{p.nombre}</h3>
+                      <p className="text-muted-foreground line-clamp-2">
+                        {p.descripcion}
+                      </p>
+
+                      <div className="flex justify-between">
+                        <span className="font-medium">Precio:</span>
+                        <span>${p.precio}</span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span className="font-medium">Estado:</span>
+                        <span>{p.estado}</span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span className="font-medium">Tiempo global:</span>
+                        <span className="font-semibold">
+                          {p.tiempoGlobal ? `${p.tiempoGlobal} días` : "No definido"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between">
+                        <span className="font-medium">Tiempo específico:</span>
+                        <span className="font-semibold">
+                          {p.tiempoPublicacion
+                            ? `${p.tiempoPublicacion} días`
+                            : "Usando global"}
+                        </span>
+                      </div>
+
+                      <div className="mt-2">
+                        <label className="text-muted-foreground text-xs">
+                          Nuevo tiempo (días):
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          defaultValue={p.tiempoPublicacion || p.tiempoGlobal || 10}
+                          className="border rounded px-2 py-1 w-full mt-1 text-sm"
+                          onChange={(e) => (p._nuevoTiempo = Number(e.target.value))}
+                        />
+                      </div>
+
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 w-full mt-3"
+                        onClick={() =>
+                          actualizarTiempo(
+                            p.id,
+                            p._nuevoTiempo || p.tiempoPublicacion || p.tiempoGlobal || 10
+                          )
+                        }
+                      >
+                        Guardar tiempo
+                      </Button>
                     </CardContent>
-                </Card>
-                ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {publicacionesConfig.map((p) => (
-                    <Card key={p.id} className="overflow-hidden shadow">
-                        {/* Imagen */}
-                        <CardHeader className="p-0">
-                        {p.urlFoto ? (
-                            <img
-                            src={
-                                p.urlFoto.startsWith("http")
-                                ? p.urlFoto
-                                : `http://localhost:4000${p.urlFoto}`
-                            }
-                            alt={p.nombre}
-                            className="w-full h-44 object-cover"
-                            />
-                        ) : (
-                            <div className="w-full h-44 bg-gray-200 flex items-center justify-center text-gray-500">
-                            Sin imagen
-                            </div>
-                        )}
-                        </CardHeader>
-
-                        {/* Contenido */}
-                        <CardContent className="p-4 space-y-3 text-sm">
-                        <h3 className="font-semibold text-lg">{p.nombre}</h3>
-                        <p className="text-muted-foreground line-clamp-2">
-                            {p.descripcion}
-                        </p>
-
-                        <div className="flex justify-between">
-                            <span className="font-medium">Precio:</span>
-                            <span>${p.precio}</span>
-                        </div>
-
-                        <div className="flex justify-between">
-                            <span className="font-medium">Estado:</span>
-                            <span>{p.estado}</span>
-                        </div>
-
-                        <div className="flex justify-between">
-                            <span className="font-medium">Tiempo global:</span>
-                            <span className="font-semibold">
-                            {p.tiempoGlobal ? `${p.tiempoGlobal} días` : "No definido"}
-                            </span>
-                        </div>
-
-                        <div className="flex justify-between">
-                            <span className="font-medium">Tiempo específico:</span>
-                            <span className="font-semibold">
-                            {p.tiempoPublicacion
-                                ? `${p.tiempoPublicacion} días`
-                                : "Usando global"}
-                            </span>
-                        </div>
-
-                        <div className="mt-2">
-                            <label className="text-muted-foreground text-xs">
-                            Nuevo tiempo (días):
-                            </label>
-                            <input
-                            type="number"
-                            min={1}
-                            defaultValue={p.tiempoPublicacion || p.tiempoGlobal || 10}
-                            className="border rounded px-2 py-1 w-full mt-1 text-sm"
-                            onChange={(e) => (p._nuevoTiempo = Number(e.target.value))}
-                            />
-                        </div>
-
-                        <Button
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700 w-full mt-3"
-                            onClick={() =>
-                            actualizarTiempo(
-                                p.id,
-                                p._nuevoTiempo || p.tiempoPublicacion || p.tiempoGlobal || 10
-                            )
-                            }
-                        >
-                            Guardar tiempo
-                        </Button>
-                        </CardContent>
-                    </Card>
-                    ))}
-                </div>
-                )}
-            </>
+                  </Card>
+                ))}
+              </div>
             )}
-
-
+          </>
+        )}
 
         {/* =====================================================
-            TAB: REPORTES
+            TAB: REPORTES ✅ NUEVO - COMPLETAMENTE FUNCIONAL
         ===================================================== */}
         {activeTab === "reportes" && (
           <>
-            <h2 className="text-2xl font-semibold mb-4">Reportes del sistema</h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-semibold">Gestión de Reportes</h2>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Filtrar:</span>
+                <Select value={filtroEstado} onValueChange={setFiltroEstado}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TODOS">Todos</SelectItem>
+                    <SelectItem value="PENDIENTE">Pendientes</SelectItem>
+                    <SelectItem value="REVISADO">Revisados</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Estadísticas */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Pendientes</p>
+                      <p className="text-3xl font-bold text-destructive">
+                        {reportes.filter(r => r.estado === "PENDIENTE").length}
+                      </p>
+                    </div>
+                    <Flag className="w-10 h-10 text-destructive" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Revisados</p>
+                      <p className="text-3xl font-bold text-primary">
+                        {reportes.filter(r => r.estado === "REVISADO").length}
+                      </p>
+                    </div>
+                    <Eye className="w-10 h-10 text-primary" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total</p>
+                      <p className="text-3xl font-bold text-foreground">
+                        {reportes.length}
+                      </p>
+                    </div>
+                    <AlertTriangle className="w-10 h-10 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tabla de reportes */}
             <Card>
-              <CardContent className="py-10 text-center text-muted-foreground">
-                Próximamente
-              </CardContent>
+              {reportesFiltrados.length === 0 ? (
+                <CardContent className="py-10 text-center text-muted-foreground">
+                  No hay reportes {filtroEstado !== "TODOS" ? filtroEstado.toLowerCase() : ""}
+                </CardContent>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Publicación</TableHead>
+                      <TableHead>Categoría</TableHead>
+                      <TableHead>Reportado por</TableHead>
+                      <TableHead>Fecha</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportesFiltrados.map((reporte) => (
+                      <TableRow key={reporte.id}>
+                        <TableCell className="font-medium">#{reporte.id}</TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium text-sm">{reporte.publicacionNombre}</p>
+                            <p className="text-xs text-muted-foreground">
+                              ${reporte.publicacionPrecio}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-xs">
+                            {categoriaLabels[reporte.categoria] || reporte.categoria}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div>
+                            <p className="text-sm">{reporte.reportadoPor}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {reporte.reportadoPorCorreo}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm">
+                            {new Date(reporte.fechaReporte).toLocaleDateString()}
+                          </span>
+                        </TableCell>
+                        <TableCell>{getEstadoBadge(reporte.estado)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1 justify-end">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleVerDetalle(reporte)}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            {reporte.estado === "PENDIENTE" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleMarcarRevisado(reporte.id)}
+                              >
+                                ✓
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-destructive"
+                              onClick={() =>
+                                setConfirmDialog({
+                                  open: true,
+                                  tipo: "eliminar-reporte",
+                                  reporteId: reporte.id
+                                })
+                              }
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() =>
+                                setConfirmDialog({
+                                  open: true,
+                                  tipo: "eliminar-publicacion",
+                                  reporteId: reporte.id
+                                })
+                              }
+                            >
+                              <AlertTriangle className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </Card>
           </>
         )}
@@ -691,7 +979,132 @@ const AdminPanel = () => {
 
       <Footer />
 
-      {/* ===== MODALES ===== */}
+      {/* ===== DIALOG DE DETALLES DE REPORTE ===== */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalles del Reporte #{selectedReporte?.id}</DialogTitle>
+            <DialogDescription>
+              Información completa del reporte
+            </DialogDescription>
+          </DialogHeader>
+          {selectedReporte && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Publicación</p>
+                  <p className="text-sm">{selectedReporte.publicacionNombre}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Precio</p>
+                  <p className="text-sm">${selectedReporte.publicacionPrecio}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Categoría</p>
+                  <p className="text-sm">
+                    {categoriaLabels[selectedReporte.categoria]}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Estado</p>
+                  {getEstadoBadge(selectedReporte.estado)}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Reportado por</p>
+                  <p className="text-sm">{selectedReporte.reportadoPor}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedReporte.reportadoPorCorreo}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Fecha</p>
+                  <p className="text-sm">
+                    {new Date(selectedReporte.fechaReporte).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              {selectedReporte.motivo && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-2">Motivo</p>
+                  <div className="bg-muted/50 p-3 rounded-lg">
+                    <p className="text-sm">{selectedReporte.motivo}</p>
+                  </div>
+                </div>
+              )}
+              {selectedReporte.revisadoPorNombre && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Revisado por</p>
+                  <p className="text-sm">{selectedReporte.revisadoPorNombre}</p>
+                </div>
+              )}
+              <div className="flex gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => navigate(`/product/${selectedReporte.publicacionId}`)}
+                >
+                  Ver publicación
+                </Button>
+                {selectedReporte.estado === "PENDIENTE" && (
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      handleMarcarRevisado(selectedReporte.id);
+                      setDialogOpen(false);
+                    }}
+                  >
+                    Marcar como revisado
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== DIALOG DE CONFIRMACIÓN DE ELIMINACIÓN ===== */}
+      <Dialog open={confirmDialog.open} onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmDialog.tipo === "eliminar-publicacion"
+                ? "¿Eliminar publicación?"
+                : "¿Eliminar reporte?"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmDialog.tipo === "eliminar-publicacion"
+                ? "Esta acción eliminará permanentemente la publicación y todos sus reportes. No se puede deshacer."
+                : "Esta acción eliminará el reporte pero la publicación seguirá activa."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDialog({ open: false, tipo: null, reporteId: null })}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirmDialog.reporteId) {
+                  if (confirmDialog.tipo === "eliminar-publicacion") {
+                    handleEliminarPublicacion(confirmDialog.reporteId);
+                  } else {
+                    handleEliminarReporte(confirmDialog.reporteId);
+                  }
+                }
+              }}
+            >
+              {confirmDialog.tipo === "eliminar-publicacion"
+                ? "Eliminar publicación"
+                : "Eliminar reporte"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== MODALES ANTERIORES ===== */}
       {successModal && (
         <SuccessModal
           open={true}
@@ -710,15 +1123,15 @@ const AdminPanel = () => {
         />
       )}
 
-      {confirmModal && (
+      {confirmModalOld && (
         <ConfirmModal
           open={true}
-          title={confirmModal.title}
-          message={confirmModal.message}
-          onCancel={() => setConfirmModal(null)}
+          title={confirmModalOld.title}
+          message={confirmModalOld.message}
+          onCancel={() => setConfirmModalOld(null)}
           onConfirm={() => {
-            confirmModal.onConfirm();
-            setConfirmModal(null);
+            confirmModalOld.onConfirm();
+            setConfirmModalOld(null);
           }}
         />
       )}

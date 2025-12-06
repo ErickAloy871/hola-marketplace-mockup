@@ -10,9 +10,8 @@ import { validateProduct, getValidationMessage } from "../utils/productValidator
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-// Guardar en backend/uploads (mismo directorio que usa express.static en index.ts)
 const uploadDir = path.join(__dirname, "../../uploads");
-// Asegurar que exista la carpeta de uploads
+
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -34,6 +33,7 @@ type ProductoRow = RowDataPacket & {
   precio: number;
   ubicacion: string;
   categoria: string;
+  tipo: string;
   urlFoto: string | null;
 };
 
@@ -55,7 +55,7 @@ r.get("/categorias", async (_req: Request, res: Response) => {
 
 r.get("/", async (req: Request, res: Response) => {
   try {
-    const { q, categoria, minPrecio, maxPrecio, page = "1", pageSize = "12" } =
+    const { q, categoria, tipo, minPrecio, maxPrecio, ordenar, page = "1", pageSize = "12" } =
       req.query as Record<string, string>;
     const p = Number(page);
     const ps = Number(pageSize);
@@ -74,6 +74,10 @@ r.get("/", async (req: Request, res: Response) => {
       where.push("CATEGORIAS.nombre = ?");
       args.push(categoria);
     }
+    if (tipo) {
+      where.push("PUBLICACIONES.tipo = ?");
+      args.push(tipo);
+    }
     if (minPrecio) {
       where.push("PUBLICACIONES.precio >= ?");
       args.push(Number(minPrecio));
@@ -85,14 +89,25 @@ r.get("/", async (req: Request, res: Response) => {
 
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
+    // Determinar ordenamiento
+    let orderBy = "PUBLICACIONES.fechaPublicacion DESC"; // Por defecto "New"
+    
+    if (ordenar === "precio_asc") {
+      orderBy = "PUBLICACIONES.precio ASC";
+    } else if (ordenar === "precio_desc") {
+      orderBy = "PUBLICACIONES.precio DESC";
+    } else if (ordenar === "rating") {
+      orderBy = "PUBLICACIONES.puntuacionCalidad DESC, PUBLICACIONES.fechaPublicacion DESC";
+    }
+
     const [items] = await pool.query<ProductoRow[]>(
       `SELECT PUBLICACIONES.id, PUBLICACIONES.nombre, PUBLICACIONES.descripcion, PUBLICACIONES.precio,
-              PUBLICACIONES.ubicacion, CATEGORIAS.nombre AS categoria, f.urlFoto
+              PUBLICACIONES.ubicacion, PUBLICACIONES.tipo, CATEGORIAS.nombre AS categoria, f.urlFoto
        FROM PUBLICACIONES
        JOIN CATEGORIAS ON CATEGORIAS.id = PUBLICACIONES.categoriaId
        LEFT JOIN fotos_publicacion f ON f.publicacionId = PUBLICACIONES.id AND f.orden = 1
        ${whereSql}
-       ORDER BY PUBLICACIONES.fechaPublicacion DESC
+       ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`,
       [...args, ps, (p - 1) * ps]
     );
@@ -121,10 +136,9 @@ r.get("/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
 
   try {
-    // Obtener información básica del producto
     const [productRows] = await pool.query<ProductoRow[]>(
       `SELECT PUBLICACIONES.id, PUBLICACIONES.nombre, PUBLICACIONES.descripcion, PUBLICACIONES.precio,
-              PUBLICACIONES.ubicacion, CATEGORIAS.nombre AS categoria, f.urlFoto
+              PUBLICACIONES.ubicacion, PUBLICACIONES.tipo, CATEGORIAS.nombre AS categoria, f.urlFoto
        FROM PUBLICACIONES
        JOIN CATEGORIAS ON CATEGORIAS.id = PUBLICACIONES.categoriaId
        LEFT JOIN fotos_publicacion f ON f.publicacionId = PUBLICACIONES.id AND f.orden = 1
@@ -138,7 +152,6 @@ r.get("/:id", async (req: Request, res: Response) => {
       return res.status(404).json({ message: "Producto no encontrado" });
     }
 
-    // Obtener todas las imágenes del producto
     const [imageRows] = await pool.query<RowDataPacket[]>(
       `SELECT urlFoto, orden FROM fotos_publicacion 
        WHERE publicacionId = ? 
@@ -149,7 +162,6 @@ r.get("/:id", async (req: Request, res: Response) => {
     const product = productRows[0];
     const imagenes = imageRows.map(row => row.urlFoto);
 
-    // Agregar las imágenes al producto
     const productWithImages = {
       ...product,
       imagenes: imagenes.length > 0 ? imagenes : (product.urlFoto ? [product.urlFoto] : [])
@@ -162,28 +174,27 @@ r.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-
 r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: Request, res: Response) => {
   try {
-    // 🔍 DEBUG: Ver qué llegó al servidor
     console.log('=== POST /productos DEBUG ===');
     console.log('Body:', req.body);
     console.log('Files:', (req as any).files);
     console.log('Usuario:', (req as any).user?.id);
 
-    // En multipart, los campos vienen en req.body y los archivos en req.files
-    const { nombre, descripcion, precio, ubicacion, categoriaId, categoria } = req.body as any;
+    const { nombre, descripcion, precio, ubicacion, categoriaId, categoria, tipo = 'PRODUCTO' } = req.body as any;
     const usuarioId = (req as any).user?.id;
 
-    // Validaciones mínimas
     if (!nombre || !precio) {
       return res.status(400).json({ message: "Faltan campos requeridos: nombre, precio" });
     }
 
-    // Resolver categoriaId a partir de nombre si es necesario
+    // Validar que tipo sea PRODUCTO o SERVICIO
+    if (tipo !== 'PRODUCTO' && tipo !== 'SERVICIO') {
+      return res.status(400).json({ message: "El tipo debe ser PRODUCTO o SERVICIO" });
+    }
+
     let finalCategoriaId = categoriaId;
     if (!finalCategoriaId && categoria) {
-      // Buscar categoría por nombre (case-insensitive)
       const [rows] = await pool.query<RowDataPacket[]>(
         "SELECT id FROM CATEGORIAS WHERE LOWER(nombre)=LOWER(?) LIMIT 1",
         [categoria]
@@ -191,7 +202,6 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       if (rows.length > 0) {
         finalCategoriaId = (rows[0] as any).id;
       } else {
-        // Insertar nueva categoría
         const [insertCat] = await pool.query(
           "INSERT INTO CATEGORIAS (nombre, descripcion, estado, fecha_creacion) VALUES (?, '', 'ACTIVA', NOW())",
           [categoria]
@@ -201,7 +211,6 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       }
     }
 
-    // Si no se proporcionó ubicacion, usar la direccion del vendedor
     let finalUbicacion = ubicacion;
     if (!finalUbicacion) {
       const [uRows] = await pool.query<RowDataPacket[]>(
@@ -213,9 +222,6 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       }
     }
 
-    // =============================
-    // ✅ VALIDACIÓN AUTOMÁTICA (ANTES DE INSERTAR)
-    // =============================
     const files = (req as any).files as any[] | undefined;
     const hasImages: boolean = files !== undefined && files.length > 0;
 
@@ -228,7 +234,6 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
 
     console.log(getValidationMessage(validationResult));
 
-    // Determinar estado inicial
     let estadoInicial = 'PENDIENTE';
     let razonRechazo = null;
 
@@ -236,23 +241,21 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       estadoInicial = 'RECHAZADA';
       razonRechazo = validationResult.reasons.join('. ');
     } else if (validationResult.score >= 80) {
-      estadoInicial = 'PUBLICADA'; // Auto-aprobación si score > 80
+      estadoInicial = 'PUBLICADA';
     }
 
-    // =============================
-    // ✅ CREAR LA PUBLICACIÓN (UNA SOLA VEZ)
-    // =============================
     const [result] = await pool.query(
       `INSERT INTO PUBLICACIONES (
-        nombre, descripcion, precio, ubicacion, categoriaId, usuarioId, 
+        nombre, descripcion, precio, ubicacion, categoriaId, tipo, usuarioId, 
         estado, razonRechazo, puntuacionCalidad, validacionAutomatica, fechaPublicacion
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())`,
       [
         nombre,
         descripcion,
         precio,
         finalUbicacion,
         finalCategoriaId,
+        tipo,
         usuarioId,
         estadoInicial,
         razonRechazo,
@@ -261,12 +264,9 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
     );
 
     const publicacionId = (result as any).insertId;
-    console.log(`📦 Publicación insertada con ID: ${publicacionId} - Estado: ${estadoInicial} - Score: ${validationResult.score}/100`);
+    console.log(`📦 Publicación insertada con ID: ${publicacionId} - Tipo: ${tipo} - Estado: ${estadoInicial} - Score: ${validationResult.score}/100`);
 
-    // =============================
-    // ✅ GUARDAR IMÁGENES
-    // =============================
-    let imagenesGuardadas = 0; // ✅ Definir variable
+    let imagenesGuardadas = 0;
 
     if (files && files.length > 0) {
       const baseUrl = `${req.protocol}://${req.get("host")}`;
@@ -291,9 +291,6 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       console.log('ℹ️ No se subieron imágenes con esta publicación');
     }
 
-    // =============================
-    // ✅ RESPUESTA AL CLIENTE (UNA SOLA VEZ)
-    // =============================
     let mensaje = "Publicación creada exitosamente";
     if (estadoInicial === 'RECHAZADA') {
       mensaje = "Publicación rechazada automáticamente";
@@ -310,6 +307,7 @@ r.post("/", verifyToken, blockModerator, upload.array("images", 5), async (req: 
       publicacionId,
       imagenesGuardadas,
       estado: estadoInicial,
+      tipo,
       score: validationResult.score,
       razones: validationResult.reasons.length > 0 ? validationResult.reasons : undefined
     });

@@ -93,3 +93,23 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction) =>
 
   next();
 };
+
+/**
+ * ✅ NUEVO: Middleware para verificar que el usuario sea MODERADOR O ADMINISTRADOR
+ */
+export const requireModeratorOrAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "No autenticado" });
+  }
+
+  const isModerator = req.user.roles.includes("MODERADOR");
+  const isAdmin = req.user.roles.includes("ADMINISTRADOR") || req.user.roles.includes("ADMIN");
+
+  if (!isModerator && !isAdmin) {
+    return res.status(403).json({ 
+      message: "Acceso denegado. Solo moderadores y administradores" 
+    });
+  }
+
+  next();
+};

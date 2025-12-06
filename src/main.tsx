@@ -5,8 +5,8 @@ import { ThemeProvider } from "next-themes";
 import App from "./App";
 import "./index.css";
 
-// opcional: tu Toaster
-import { Toaster } from "@/components/ui/sonner"; // o desde "sonner"
+// ✅ CAMBIO: Usar el Toaster correcto (no el de sonner)
+import { Toaster } from "@/components/ui/toaster";
 
 const queryClient = new QueryClient();
 

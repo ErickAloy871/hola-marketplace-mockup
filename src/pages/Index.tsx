@@ -8,7 +8,6 @@ import ProductCard from "@/components/ProductCard";
 import Footer from "@/components/Footer";
 import { productosApi } from "@/lib/api";
 
-
 interface Product {
   id: string;
   nombre: string;
@@ -19,25 +18,69 @@ interface Product {
   urlFoto: string | null;
 }
 
-
 const Index = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Estados para filtros
+  const [selectedTipos, setSelectedTipos] = useState<string[]>(["PRODUCTO", "SERVICIO"]);
+  const [selectedCategorias, setSelectedCategorias] = useState<string[]>([]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
+  const [activeOrden, setActiveOrden] = useState<string>("new");
 
-
+  // Cargar productos cuando cambien los filtros
   useEffect(() => {
     loadProducts();
-  }, []);
-
+  }, [selectedTipos, selectedCategorias, priceRange, activeOrden]);
 
   const loadProducts = async () => {
     try {
       setLoading(true);
-      const response = await productosApi.getAll();
-      console.log("API Response:", response);
-      setProducts(response.items || []);
+      const params: any = {
+        q: searchQuery || undefined,
+        minPrecio: priceRange[0],
+        maxPrecio: priceRange[1],
+      };
+
+      // Filtrar por tipo solo si no están ambos seleccionados
+      if (selectedTipos.length === 1) {
+        params.tipo = selectedTipos[0];
+      } else if (selectedTipos.length === 0) {
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
+
+      // Filtrar por categoría si hay alguna seleccionada
+      if (selectedCategorias.length === 1) {
+        params.categoria = selectedCategorias[0];
+      }
+      // Si hay múltiples categorías, no filtramos por categoría en el backend
+      // (el backend solo soporta una categoría a la vez)
+
+      // Agregar ordenamiento
+      if (activeOrden === "precio_asc") {
+        params.ordenar = "precio_asc";
+      } else if (activeOrden === "precio_desc") {
+        params.ordenar = "precio_desc";
+      } else if (activeOrden === "rating") {
+        params.ordenar = "rating";
+      }
+
+      const response = await productosApi.getAll(params);
+      let items = response.items || [];
+
+      // Filtrado manual en frontend si hay múltiples categorías seleccionadas
+      if (selectedCategorias.length > 1) {
+        items = items.filter((p: Product) => 
+          selectedCategorias.includes(p.categoria)
+        );
+      }
+
+      setProducts(items);
+      setError(null);
     } catch (err) {
       console.error("Error loading products:", err);
       setError("Error al cargar productos: " + (err as Error).message);
@@ -46,42 +89,39 @@ const Index = () => {
     }
   };
 
-
-  const handleSearch = async () => {
-    try {
-      setLoading(true);
-      const response = await productosApi.getAll({ q: searchQuery });
-      setProducts(response.items || []);
-    } catch (err) {
-      setError("Error al buscar productos");
-      console.error("Error searching products:", err);
-    } finally {
-      setLoading(false);
-    }
+  const handleSearch = () => {
+    loadProducts();
   };
 
+  const handleOrdenClick = (orden: string) => {
+    setActiveOrden(orden);
+  };
 
   const filters = [
-    { label: "New", active: true },
-    { label: "Price ascending", active: false },
-    { label: "Price descending", active: false },
-    { label: "Rating", active: false },
+    { key: "new", label: "New" },
+    { key: "precio_asc", label: "Price ascending" },
+    { key: "precio_desc", label: "Price descending" },
+    { key: "rating", label: "Rating" },
   ];
 
-
   return (
-    // ✅ CAMBIO: Agregar flex y flex-col para layout vertical
     <div className="flex flex-col min-h-screen bg-background">
       <Navbar />
       
-      {/* ✅ CAMBIO: flex-1 para que el contenido crezca */}
       <main className="flex-1 container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Sidebar */}
           <div className="lg:block hidden">
-            <CategorySidebar />
+            <CategorySidebar 
+              selectedTipos={selectedTipos}
+              onTiposChange={setSelectedTipos}
+              selectedCategorias={selectedCategorias}
+              onCategoriasChange={setSelectedCategorias}
+              priceRange={priceRange}
+              onPriceChange={setPriceRange}
+              maxPrice={1000}
+            />
           </div>
-
 
           {/* Main Content */}
           <div className="flex-1">
@@ -102,12 +142,13 @@ const Index = () => {
                 />
               </div>
               <div className="flex flex-wrap gap-2">
-                {filters.map((filter, idx) => (
+                {filters.map((filter) => (
                   <Badge
-                    key={idx}
-                    variant={filter.active ? "default" : "outline"}
+                    key={filter.key}
+                    variant={activeOrden === filter.key ? "default" : "outline"}
+                    onClick={() => handleOrdenClick(filter.key)}
                     className={
-                      filter.active
+                      activeOrden === filter.key
                         ? "bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer px-4 py-1.5"
                         : "bg-secondary text-secondary-foreground hover:bg-secondary/80 cursor-pointer px-4 py-1.5 border-border"
                     }
@@ -118,7 +159,27 @@ const Index = () => {
               </div>
             </div>
 
-
+            {/* Filtros activos */}
+            {(selectedCategorias.length > 0 || selectedTipos.length < 2) && (
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="text-sm text-muted-foreground">Filtros activos:</span>
+                {selectedCategorias.map((cat) => (
+                  <Badge 
+                    key={cat} 
+                    variant="secondary" 
+                    className="cursor-pointer"
+                    onClick={() => setSelectedCategorias(selectedCategorias.filter(c => c !== cat))}
+                  >
+                    {cat} ✕
+                  </Badge>
+                ))}
+                {selectedTipos.length === 1 && (
+                  <Badge variant="secondary">
+                    {selectedTipos[0] === "PRODUCTO" ? "📦 Productos" : "🛠️ Servicios"}
+                  </Badge>
+                )}
+              </div>
+            )}
 
             {/* Loading State */}
             {loading && (
@@ -126,7 +187,6 @@ const Index = () => {
                 <div className="text-muted-foreground">Cargando productos...</div>
               </div>
             )}
-
 
             {/* Error State */}
             {error && (
@@ -141,42 +201,37 @@ const Index = () => {
               </div>
             )}
 
-
             {/* Products Grid */}
             {!loading && !error && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {products.map((product) => (
                   <ProductCard
                     key={product.id}
-                    id={product.id} 
-                    title={product.nombre || "Sin nombre"}
-                    price={Number(product.precio) || 0}
-                    description={product.descripcion}
-                    image={product.urlFoto}
-                    location={product.ubicacion}
-                    category={product.categoria}
+                    id={product.id}
+                    nombre={product.nombre || "Sin nombre"}
+                    precio={Number(product.precio) || 0}
+                    descripcion={product.descripcion}
+                    urlFoto={product.urlFoto}
+                    ubicacion={product.ubicacion}
+                    categoria={product.categoria}
                   />
                 ))}
               </div>
             )}
 
-
             {/* No Products */}
             {!loading && !error && products.length === 0 && (
               <div className="text-center py-8">
-                <div className="text-muted-foreground">No se encontraron productos</div>
+                <div className="text-muted-foreground">No se encontraron productos con los filtros aplicados</div>
               </div>
             )}
           </div>
         </div>
       </main>
 
-
-      {/* ✅ Footer siempre al final */}
       <Footer />
     </div>
   );
 };
-
 
 export default Index;

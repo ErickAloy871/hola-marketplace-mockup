@@ -1,6 +1,5 @@
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
-// URL base del backend (sin el sufijo /api). Usar la variable VITE_API_URL si está definida.
 export const BACKEND_BASE = (import.meta.env.VITE_API_URL
   ? String(import.meta.env.VITE_API_URL).replace(/\/api\/?$/, "")
   : "http://localhost:4000");
@@ -13,7 +12,6 @@ export async function api(path: string, opts: RequestInit = {}) {
   return res.json();
 }
 
-// Funciones específicas para la API
 export const authApi = {
   login: async (correo: string, password: string) => {
     return api("/auth/login", {
@@ -35,7 +33,16 @@ export const authApi = {
 };
 
 export const productosApi = {
-  getAll: async (params?: { q?: string; categoria?: string; minPrecio?: number; maxPrecio?: number; page?: number; pageSize?: number }) => {
+  getAll: async (params?: { 
+    q?: string; 
+    categoria?: string; 
+    tipo?: string;
+    minPrecio?: number; 
+    maxPrecio?: number; 
+    ordenar?: string;
+    page?: number; 
+    pageSize?: number 
+  }) => {
     const searchParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -50,13 +57,13 @@ export const productosApi = {
     return api(`/productos/${id}`);
   },
 
-  // ✅ NUEVO: Crear producto
   create: async (productoData: {
     nombre: string;
     descripcion: string;
     precio: number;
     ubicacion: string;
     categoriaId: number;
+    tipo: 'PRODUCTO' | 'SERVICIO';
   }) => {
     return api("/productos", {
       method: "POST",
@@ -65,7 +72,6 @@ export const productosApi = {
   }
 };
 
-// ✅ NUEVO: API de moderación
 export const moderationApi = {
   getPending: async () => {
     return api("/moderation/pending");
@@ -88,12 +94,10 @@ export const moderationApi = {
     return api("/moderation/stats");
   },
 
-  // ✅ AGREGADO: Obtener todas las publicaciones pendientes/publicadas (para el panel)
   getAllModeration: async () => {
     return api("/moderation/publicaciones-moderacion");
   },
 
-  // ✅ AGREGADO: Dar de baja producto (pendiente o publicado)
   darDeBaja: async (id: number, motivo?: string) => {
     return api(`/moderation/dar-baja/${id}`, {
       method: "POST",
@@ -101,10 +105,62 @@ export const moderationApi = {
     });
   },
 
-  // Obtener categorías activas
   getCategories: async () => {
-    // Las categorías están expuestas en el router de productos en el backend
-    // en la ruta /api/productos/categorias, por eso solicitamos /productos/categorias
     return api("/productos/categorias");
+  }
+};
+
+export const reportesApi = {
+  create: async (publicacionId: number, categoria: string, motivo?: string) => {
+    return api("/reportes", {
+      method: "POST",
+      body: JSON.stringify({ publicacionId, categoria, motivo })
+    });
+  },
+
+  getAll: async () => {
+    return api("/reportes");
+  },
+
+  marcarRevisado: async (id: number) => {
+    return api(`/reportes/${id}/revisar`, {
+      method: "POST"
+    });
+  },
+
+  eliminar: async (id: number) => {
+    return api(`/reportes/${id}`, {
+      method: "DELETE"
+    });
+  },
+
+  eliminarPublicacion: async (id: number) => {
+    return api(`/reportes/${id}/eliminar-publicacion`, {
+      method: "POST"
+    });
+  }
+};
+
+// ✅ NUEVO: API de productos de interés
+export const interesesApi = {
+  agregar: async (publicacionId: number) => {
+    return api("/intereses", {
+      method: "POST",
+      body: JSON.stringify({ publicacionId })
+    });
+  },
+
+  eliminar: async (publicacionId: number) => {
+    return api(`/intereses/${publicacionId}`, {
+      method: "DELETE"
+    });
+  },
+
+  obtenerTodos: async () => {
+    return api("/intereses");
+  },
+
+  verificar: async (publicacionId: number) => {
+    return api(`/intereses/check/${publicacionId}`);
   }
 };

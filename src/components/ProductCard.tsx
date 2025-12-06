@@ -6,15 +6,15 @@ import { MapPin } from "lucide-react";
 
 interface ProductCardProps {
   id: string;
-  title: string;
-  price: number;
-  description?: string;
-  image?: string | null;
-  location?: string;
-  category?: string;
+  nombre: string; // ✅ CAMBIO: era "title"
+  precio: number; // ✅ CAMBIO: era "price"
+  descripcion?: string; // ✅ CAMBIO: era "description"
+  urlFoto?: string | null; // ✅ CAMBIO: era "image"
+  ubicacion?: string; // ✅ CAMBIO: era "location"
+  categoria?: string; // ✅ CAMBIO: era "category"
 }
 
-const ProductCard = ({ id, title, price, description, image, location, category }: ProductCardProps) => {
+const ProductCard = ({ id, nombre, precio, descripcion, urlFoto, ubicacion, categoria }: ProductCardProps) => {
   const navigate = useNavigate();
 
   return (
@@ -23,13 +23,9 @@ const ProductCard = ({ id, title, price, description, image, location, category 
       className="group hover:shadow-md transition-all duration-200 cursor-pointer border-border overflow-hidden bg-card"
     >
       <div className="aspect-square bg-muted/50 relative overflow-hidden">
-        {image ? (
+        {urlFoto ? (
           (() => {
-            // Normalizar la URL de la imagen: puede ser
-            // - URL completa: http(s)://...
-            // - ruta relativa empezando con /uploads/...
-            // - solo el nombre de archivo
-            const imgStr = String(image);
+            const imgStr = String(urlFoto);
             const src = imgStr.startsWith("http")
               ? imgStr
               : imgStr.startsWith("/")
@@ -39,7 +35,7 @@ const ProductCard = ({ id, title, price, description, image, location, category 
             return (
               <img
                 src={src}
-                alt={title}
+                alt={nombre}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               />
             );
@@ -49,26 +45,26 @@ const ProductCard = ({ id, title, price, description, image, location, category 
             <div className="text-muted-foreground text-sm">Sin imagen</div>
           </div>
         )}
-        {category && (
+        {categoria && (
           <Badge
             variant="secondary"
             className="absolute top-2 left-2 text-xs"
           >
-            {category}
+            {categoria}
           </Badge>
         )}
       </div>
       <div className="p-4">
-        <h3 className="font-medium text-foreground text-sm mb-1 line-clamp-2">{title}</h3>
-        {description && (
-          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{description}</p>
+        <h3 className="font-medium text-foreground text-sm mb-1 line-clamp-2">{nombre}</h3>
+        {descripcion && (
+          <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{descripcion}</p>
         )}
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-foreground">${Number(price).toFixed(2)}</p>
-          {location && (
+          <p className="text-sm font-semibold text-foreground">${Number(precio).toFixed(2)}</p>
+          {ubicacion && (
             <div className="flex items-center text-xs text-muted-foreground">
               <MapPin className="w-3 h-3 mr-1" />
-              {location}
+              {ubicacion}
             </div>
           )}
         </div>
