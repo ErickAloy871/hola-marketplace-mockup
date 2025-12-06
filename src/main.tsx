@@ -4,9 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import App from "./App";
 import "./index.css";
-
-// ✅ CAMBIO: Usar el Toaster correcto (no el de sonner)
 import { Toaster } from "@/components/ui/toaster";
+import { MessagesProvider } from "@/context/MessagesContext";
 
 const queryClient = new QueryClient();
 
@@ -14,8 +13,10 @@ createRoot(document.getElementById("root")!).render(
   <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
-        <Toaster />
+        <MessagesProvider>
+          <App />
+          <Toaster />
+        </MessagesProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </ThemeProvider>

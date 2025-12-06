@@ -4,7 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ImageGallery from "@/components/ImageGallery";
 import ReportDialog from "@/components/ReportDialog";
-import { productosApi, interesesApi } from "@/lib/api";
+import { productosApi, interesesApi, chatApi } from "@/lib/api";
 import { ArrowLeft, MapPin, Tag, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,7 +26,7 @@ const ProductDetail = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  
+
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +50,7 @@ const ProductDetail = () => {
 
   const loadProduct = async () => {
     if (!id) return;
-    
+
     try {
       setLoading(true);
       setError(null);
@@ -66,7 +66,7 @@ const ProductDetail = () => {
 
   const verificarFavorito = async () => {
     if (!id) return;
-    
+
     try {
       const response = await interesesApi.verificar(Number(id));
       setEsFavorito(response.esFavorito);
@@ -125,6 +125,33 @@ const ProductDetail = () => {
     }
   };
 
+  // ✅ NUEVO: iniciar chat desde la publicación
+  const handleEnviarMensaje = async () => {
+    if (!product || !id) return;
+
+    if (!isAuthenticated) {
+      toast({
+        title: "Inicia sesión",
+        description: "Debes iniciar sesión para enviar mensajes al vendedor",
+        variant: "destructive",
+      });
+      navigate("/auth?tab=login");
+      return;
+    }
+
+    try {
+      const res = await chatApi.crearConversacionDesdePublicacion(Number(id));
+      navigate(`/mensajes?conv=${res.conversacionId}`);
+    } catch (err) {
+      console.error("Error creando conversación desde publicación:", err);
+      toast({
+        title: "Error",
+        description: "No se pudo iniciar la conversación con el vendedor",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -146,10 +173,10 @@ const ProductDetail = () => {
         <Navbar />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <h2 className="text-xl font-semibold mb-4 text-foreground">Producto no encontrado</h2>
-            <Button onClick={() => navigate("/")}>
-              Volver al inicio
-            </Button>
+            <h2 className="text-xl font-semibold mb-4 text-foreground">
+              Producto no encontrado
+            </h2>
+            <Button onClick={() => navigate("/")}>Volver al inicio</Button>
           </div>
         </div>
         <Footer />
@@ -175,9 +202,9 @@ const ProductDetail = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Galería de imágenes */}
           <div>
-            <ImageGallery 
-              images={product.imagenes || (product.urlFoto ? [product.urlFoto] : [])} 
-              alt={product.nombre} 
+            <ImageGallery
+              images={product.imagenes || (product.urlFoto ? [product.urlFoto] : [])}
+              alt={product.nombre}
             />
           </div>
 
@@ -192,7 +219,7 @@ const ProductDetail = () => {
                   ${Number(product.precio).toFixed(2)}
                 </p>
               </div>
-              
+
               {/* Botón Me interesa */}
               {puedeUsarIntereses() && (
                 <Button
@@ -200,10 +227,12 @@ const ProductDetail = () => {
                   size="icon"
                   onClick={toggleFavorito}
                   disabled={loadingFavorito}
-                  className={`w-12 h-12 ${esFavorito ? 'bg-red-500 hover:bg-red-600' : ''}`}
+                  className={`w-12 h-12 ${
+                    esFavorito ? "bg-red-500 hover:bg-red-600" : ""
+                  }`}
                 >
-                  <Heart 
-                    className={`w-5 h-5 ${esFavorito ? 'fill-white' : ''}`} 
+                  <Heart
+                    className={`w-5 h-5 ${esFavorito ? "fill-white" : ""}`}
                   />
                 </Button>
               )}
@@ -227,7 +256,9 @@ const ProductDetail = () => {
 
             {/* Descripción */}
             <div>
-              <h2 className="text-lg font-semibold mb-2 text-foreground">Descripción</h2>
+              <h2 className="text-lg font-semibold mb-2 text-foreground">
+                Descripción
+              </h2>
               <p className="text-muted-foreground leading-relaxed">
                 {product.descripcion || "Sin descripción"}
               </p>
@@ -235,10 +266,13 @@ const ProductDetail = () => {
 
             {/* Botones de acción */}
             <div className="space-y-3 pt-4">
-              <Button className="w-full h-12 bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white font-medium">
+              <Button
+                className="w-full h-12 bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white font-medium"
+                onClick={handleEnviarMensaje}
+              >
                 Enviar mensaje
               </Button>
-              
+
               {/* Botón de reporte */}
               <div className="flex justify-center">
                 <ReportDialog publicacionId={product.id} />
@@ -248,8 +282,9 @@ const ProductDetail = () => {
             {/* Advertencia de seguridad */}
             <div className="bg-muted/50 border border-border rounded-lg p-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
-                ⚠️ <strong>Consejo de seguridad:</strong> Nunca realices pagos por adelantado sin verificar el producto. 
-                Reúnete en lugares públicos para transacciones seguras.
+                ⚠️ <strong>Consejo de seguridad:</strong> Nunca realices pagos
+                por adelantado sin verificar el producto. Reúnete en lugares
+                públicos para transacciones seguras.
               </p>
             </div>
           </div>

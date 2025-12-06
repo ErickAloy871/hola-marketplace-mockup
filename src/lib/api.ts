@@ -6,7 +6,10 @@ export const BACKEND_BASE = (import.meta.env.VITE_API_URL
 
 export async function api(path: string, opts: RequestInit = {}) {
   const token = localStorage.getItem("token");
-  const headers = { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   const res = await fetch(API + path, { ...opts, headers });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -16,32 +19,46 @@ export const authApi = {
   login: async (correo: string, password: string) => {
     return api("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ correo, password })
+      body: JSON.stringify({ correo, password }),
     });
   },
 
-  register: async (nombre: string, apellido: string, correo: string, password: string, telefono: string, direccion: string) => {
+  register: async (
+    nombre: string,
+    apellido: string,
+    correo: string,
+    password: string,
+    telefono: string,
+    direccion: string
+  ) => {
     return api("/auth/register", {
       method: "POST",
-      body: JSON.stringify({ nombre, apellido, correo, password, telefono, direccion })
+      body: JSON.stringify({
+        nombre,
+        apellido,
+        correo,
+        password,
+        telefono,
+        direccion,
+      }),
     });
   },
 
   me: async () => {
     return api("/auth/me");
-  }
+  },
 };
 
 export const productosApi = {
-  getAll: async (params?: { 
-    q?: string; 
-    categoria?: string; 
+  getAll: async (params?: {
+    q?: string;
+    categoria?: string;
     tipo?: string;
-    minPrecio?: number; 
-    maxPrecio?: number; 
+    minPrecio?: number;
+    maxPrecio?: number;
     ordenar?: string;
-    page?: number; 
-    pageSize?: number 
+    page?: number;
+    pageSize?: number;
   }) => {
     const searchParams = new URLSearchParams();
     if (params) {
@@ -63,13 +80,13 @@ export const productosApi = {
     precio: number;
     ubicacion: string;
     categoriaId: number;
-    tipo: 'PRODUCTO' | 'SERVICIO';
+    tipo: "PRODUCTO" | "SERVICIO";
   }) => {
     return api("/productos", {
       method: "POST",
-      body: JSON.stringify(productoData)
+      body: JSON.stringify(productoData),
     });
-  }
+  },
 };
 
 export const moderationApi = {
@@ -79,14 +96,14 @@ export const moderationApi = {
 
   approve: async (id: number) => {
     return api(`/moderation/approve/${id}`, {
-      method: "POST"
+      method: "POST",
     });
   },
 
   reject: async (id: number, motivo?: string) => {
     return api(`/moderation/reject/${id}`, {
       method: "POST",
-      body: JSON.stringify({ motivo })
+      body: JSON.stringify({ motivo }),
     });
   },
 
@@ -101,20 +118,20 @@ export const moderationApi = {
   darDeBaja: async (id: number, motivo?: string) => {
     return api(`/moderation/dar-baja/${id}`, {
       method: "POST",
-      body: JSON.stringify({ motivo })
+      body: JSON.stringify({ motivo }),
     });
   },
 
   getCategories: async () => {
     return api("/productos/categorias");
-  }
+  },
 };
 
 export const reportesApi = {
   create: async (publicacionId: number, categoria: string, motivo?: string) => {
     return api("/reportes", {
       method: "POST",
-      body: JSON.stringify({ publicacionId, categoria, motivo })
+      body: JSON.stringify({ publicacionId, categoria, motivo }),
     });
   },
 
@@ -124,21 +141,21 @@ export const reportesApi = {
 
   marcarRevisado: async (id: number) => {
     return api(`/reportes/${id}/revisar`, {
-      method: "POST"
+      method: "POST",
     });
   },
 
   eliminar: async (id: number) => {
     return api(`/reportes/${id}`, {
-      method: "DELETE"
+      method: "DELETE",
     });
   },
 
   eliminarPublicacion: async (id: number) => {
     return api(`/reportes/${id}/eliminar-publicacion`, {
-      method: "POST"
+      method: "POST",
     });
-  }
+  },
 };
 
 // ✅ NUEVO: API de productos de interés
@@ -146,13 +163,13 @@ export const interesesApi = {
   agregar: async (publicacionId: number) => {
     return api("/intereses", {
       method: "POST",
-      body: JSON.stringify({ publicacionId })
+      body: JSON.stringify({ publicacionId }),
     });
   },
 
   eliminar: async (publicacionId: number) => {
     return api(`/intereses/${publicacionId}`, {
-      method: "DELETE"
+      method: "DELETE",
     });
   },
 
@@ -162,5 +179,48 @@ export const interesesApi = {
 
   verificar: async (publicacionId: number) => {
     return api(`/intereses/check/${publicacionId}`);
-  }
+  },
+};
+
+// ✅ NUEVO: API de chat
+export const chatApi = {
+  // Lista de conversaciones del usuario actual
+  getConversaciones: async () => {
+    return api("/chat/conversaciones");
+  },
+
+  // Crear u obtener conversación con otro usuario
+  crearConversacionConUsuario: async (otroUsuarioId: number) => {
+    return api("/chat/conversaciones", {
+      method: "POST",
+      body: JSON.stringify({ otroUsuarioId }),
+    });
+  },
+
+  // Crear u obtener conversación a partir de una publicación
+  crearConversacionDesdePublicacion: async (publicacionId: number) => {
+    return api("/chat/conversaciones", {
+      method: "POST",
+      body: JSON.stringify({ publicacionId }),
+    });
+  },
+
+  // Obtener mensajes de una conversación
+  getMensajes: async (conversacionId: number) => {
+    return api(`/chat/conversaciones/${conversacionId}/mensajes`);
+  },
+
+  // Enviar mensaje
+  enviarMensaje: async (conversacionId: number, contenido: string) => {
+    return api("/chat/mensajes", {
+      method: "POST",
+      body: JSON.stringify({ conversacionId, contenido }),
+    });
+  },
+
+  // Buscar usuarios para iniciar chat
+  buscarUsuarios: async (q: string) => {
+    const params = new URLSearchParams({ q });
+    return api(`/chat/usuarios?${params.toString()}`);
+  },
 };

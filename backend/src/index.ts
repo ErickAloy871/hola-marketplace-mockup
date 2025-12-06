@@ -4,47 +4,82 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createServer } from "http";
+import { Server } from "socket.io";
 import { pool } from "./db.js";
-import auth from "./routes/auth.js";
-import productos from "./routes/productos.js";
-import router from './routes/index.js';
+import router from "./routes/index.js";
 import adminRoutes from "./routes/admin.js";
-
-// ✅ MODIFICADO: Sin .js
+import { registerSocketHandlers } from "./lib/socketHandler.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Helmet por defecto puede establecer Cross-Origin-Resource-Policy a "same-origin",
-// lo que bloquea la incrustación de imágenes desde otro origen (frontend en :5173).
-// Ajustamos la política para permitir cross-origin en recursos estáticos (images).
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+// Seguridad básica
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
-// CORS para APIs
-app.use(cors());
+// CORS para APIs REST
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+
+app.use(
+  cors({
+    origin: FRONTEND_URL,
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
+// Archivos estáticos (imágenes)
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
+// Healthcheck BD
 app.get("/health/db", async (_req, res) => {
   try {
     const [rows] = await pool.query("SELECT 1 as ok");
     res.json({ db: (rows as any)[0].ok === 1 ? "up" : "down" });
-  } catch (e) { res.status(500).json({ db: "down" }); }
+  } catch (e) {
+    res.status(500).json({ db: "down" });
+  }
 });
 
-app.use('/api', router);
-app.use('/api/admin', adminRoutes);
+// Rutas principales
+app.use("/api", router);
+app.use("/api/admin", adminRoutes);
 
+// Crear servidor HTTP y Socket.IO
+const httpServer = createServer(app);
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: FRONTEND_URL,
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
+// Registrar handlers de sockets
+const socketUtils = registerSocketHandlers(io);
+
+// Hacer accesible socketUtils globalmente si luego queremos usar emitNuevoMensaje en rutas
+// (opcional, de momento no lo usaremos directamente)
+export { io, socketUtils };
 
 (async () => {
-  try { const c = await pool.getConnection(); await c.query("SELECT 1"); c.release(); console.log("✅ MySQL OK"); }
-  catch (e) { console.error("❌ MySQL ERROR", e); }
+  try {
+    const c = await pool.getConnection();
+    await c.query("SELECT 1");
+    c.release();
+    console.log("✅ MySQL OK");
+  } catch (e) {
+    console.error("❌ MySQL ERROR", e);
+  }
 })();
 
 const port = Number(process.env.PORT || 4000);
-app.listen(port, () => console.log(`API http://localhost:${port}`));
+httpServer.listen(port, () => console.log(`API + WS http://localhost:${port}`));

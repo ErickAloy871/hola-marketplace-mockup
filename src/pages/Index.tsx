@@ -65,9 +65,7 @@ const Index = () => {
         params.ordenar = "precio_asc";
       } else if (activeOrden === "precio_desc") {
         params.ordenar = "precio_desc";
-      } else if (activeOrden === "rating") {
-        params.ordenar = "rating";
-      }
+      } 
 
       const response = await productosApi.getAll(params);
       let items = response.items || [];
@@ -98,10 +96,9 @@ const Index = () => {
   };
 
   const filters = [
-    { key: "new", label: "New" },
-    { key: "precio_asc", label: "Price ascending" },
-    { key: "precio_desc", label: "Price descending" },
-    { key: "rating", label: "Rating" },
+    { key: "new", label: "Más Nuevo" },
+    { key: "precio_asc", label: "Precio ascendente" },
+    { key: "precio_desc", label: "Precio descendente" },
   ];
 
   return (

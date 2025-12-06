@@ -5,14 +5,15 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ProductDetail from "./pages/ProductDetail";
 import VerifyEmailPage from "./pages/VerifyEmail";
-import ModerationPanel from "./pages/ModerationPanel"; 
+import ModerationPanel from "./pages/ModerationPanel";
 import CreateProduct from "./pages/CreateProduct";
 import SellDialog from "@/components/SellDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AdminDashboard from "./pages/AdminDashboard";
 import ResetPassword from "./pages/ResetPassword";
 import EditProfile from "./pages/EditProfile";
-import MisIntereses from "./pages/MisIntereses"; // ✅ NUEVO
+import MisIntereses from "./pages/MisIntereses";
+import MessagesPage from "./pages/Messages";
 
 export default function App() {
   return (
@@ -30,7 +31,8 @@ export default function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/sell" element={<CreateProduct />} />
         <Route path="/create-product" element={<CreateProduct />} />
-        <Route path="/mis-intereses" element={<MisIntereses />} /> {/* ✅ NUEVO */}
+        <Route path="/mis-intereses" element={<MisIntereses />} />
+        <Route path="/mensajes" element={<MessagesPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     </TooltipProvider>

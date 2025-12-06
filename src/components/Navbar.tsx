@@ -9,36 +9,47 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useMessagesContext } from "@/context/MessagesContext";
+import { useEffect } from "react";
 
 function getDisplayRole(roles: string[]) {
   if (!roles) return "";
-
   if (roles.includes("ADMINISTRADOR")) return "ADMINISTRADOR";
   if (roles.includes("MODERADOR")) return "MODERADOR";
-
   return roles.join(", ");
 }
 
 const Navbar = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
+  const { setTotalNoLeidos } = useMessagesContext();
 
   const handleLogout = () => {
     logout();
+    setTotalNoLeidos(0);
     navigate("/");
   };
 
   const isModerator = user?.roles?.includes("MODERADOR");
-  const isAdmin = user?.roles?.includes("ADMINISTRADOR") || user?.roles?.includes("ADMIN");
+  const isAdmin =
+    user?.roles?.includes("ADMINISTRADOR") || user?.roles?.includes("ADMIN");
   const isVendedor = user?.roles?.includes("VENDEDOR");
   const isComprador = user?.roles?.includes("COMPRADOR");
+
+  // Si se desautentica por cualquier razón, limpiar contador
+  useEffect(() => {
+    if (!isAuthenticated) setTotalNoLeidos(0);
+  }, [isAuthenticated, setTotalNoLeidos]);
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate("/")}>
+          <div
+            className="flex items-center gap-2 cursor-pointer"
+            onClick={() => navigate("/")}
+          >
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shadow-sm">
               <ShoppingCart className="w-6 h-6 text-white" />
             </div>
@@ -52,7 +63,12 @@ const Navbar = () => {
             <button className="text-foreground hover:text-primary transition-colors font-medium">
               Notificaciones
             </button>
-            <button className="text-foreground hover:text-primary transition-colors font-medium">
+
+            {/* Botón Mensajes SIN indicador */}
+            <button
+              className="text-foreground hover:text-primary transition-colors font-medium"
+              onClick={() => navigate("/mensajes")}
+            >
               Mensajes
             </button>
           </div>
@@ -61,7 +77,6 @@ const Navbar = () => {
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <>
-                {/* Mostrar rol del usuario */}
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
                   {getDisplayRole(user.roles)}
                 </span>
@@ -88,7 +103,6 @@ const Navbar = () => {
                       Editar perfil
                     </DropdownMenuItem>
 
-                    {/* ✅ NUEVO: Opción "Me Interesa" solo para COMPRADOR y VENDEDOR */}
                     {(isComprador || isVendedor) && !isAdmin && !isModerator && (
                       <>
                         <DropdownMenuSeparator />
@@ -99,11 +113,10 @@ const Navbar = () => {
                       </>
                     )}
 
-                    {/* ✅ CORREGIDO: Botón para publicar producto (SOLO compradores/vendedores) */}
                     {(isVendedor || isComprador) && !isAdmin && !isModerator && (
                       <>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem 
+                        <DropdownMenuItem
                           onClick={() => navigate("/create-product")}
                           className="text-green-600 font-medium"
                         >
@@ -115,15 +128,15 @@ const Navbar = () => {
 
                     <DropdownMenuSeparator />
 
-                    {/* Panel de Administrador: SOLO si es ADMIN */}
                     {isAdmin && (
                       <DropdownMenuItem onClick={() => navigate("/admin")}>
                         <Shield className="mr-2 h-4 w-4 text-emerald-600" />
-                        <span className="text-emerald-600">Panel de Administrador</span>
+                        <span className="text-emerald-600">
+                          Panel de Administrador
+                        </span>
                       </DropdownMenuItem>
                     )}
 
-                    {/* Panel de Moderación: SOLO si es moderador y NO es admin */}
                     {!isAdmin && isModerator && (
                       <DropdownMenuItem onClick={() => navigate("/moderation")}>
                         <Shield className="mr-2 h-4 w-4 text-blue-600" />
@@ -131,7 +144,6 @@ const Navbar = () => {
                       </DropdownMenuItem>
                     )}
 
-                    {/* Ocultar "Empezar a vender" para moderadores y administradores */}
                     {!isModerator &&
                       !isAdmin &&
                       user?.roles?.includes("COMPRADOR") &&
@@ -150,7 +162,10 @@ const Navbar = () => {
 
                     {(isModerator || isAdmin) && <DropdownMenuSeparator />}
 
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <DropdownMenuItem
+                      onClick={handleLogout}
+                      className="text-red-600"
+                    >
                       <LogOut className="mr-2 h-4 w-4" />
                       Cerrar sesión
                     </DropdownMenuItem>
