@@ -72,7 +72,10 @@ const NotificationBell = () => {
   }, [socket, isModerator]);
 
   const handleNotificationClick = (notification: Notification) => {
-    navigate(`/product/${notification.publicacionId}`);
+    // ✅ Redirigir al panel apropiado según el rol
+    const isAdmin = user?.roles?.includes("ADMINISTRADOR");
+    const panelPath = isAdmin ? "/admin" : "/moderator";
+    navigate(`${panelPath}?tab=reportes`);
     setIsOpen(false);
   };
 

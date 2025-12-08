@@ -10,6 +10,7 @@ import CreateProduct from "./pages/CreateProduct";
 import SellDialog from "@/components/SellDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import AdminDashboard from "./pages/AdminDashboard";
+import ModeratorPanel from "./pages/ModeratorPanel";
 import ResetPassword from "./pages/ResetPassword";
 import EditProfile from "./pages/EditProfile";
 import MisIntereses from "./pages/MisIntereses";
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/profile/edit" element={<EditProfile />} />
         <Route path="/moderation" element={<ModerationPanel />} />
+        <Route path="/moderator" element={<ModeratorPanel />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/sell" element={<CreateProduct />} />
         <Route path="/create-product" element={<CreateProduct />} />

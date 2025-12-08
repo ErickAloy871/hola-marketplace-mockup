@@ -14,19 +14,19 @@ function validatePasswordStrength(password: string): { valid: boolean; message?:
   const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
 
   if (password.length < minLength) {
-      return { valid: false, message: 'La contraseña debe tener al menos 8 caracteres' };
+    return { valid: false, message: 'La contraseña debe tener al menos 8 caracteres' };
   }
   if (!hasUpperCase) {
-      return { valid: false, message: 'La contraseña debe contener al menos una letra mayúscula' };
+    return { valid: false, message: 'La contraseña debe contener al menos una letra mayúscula' };
   }
   if (!hasLowerCase) {
-      return { valid: false, message: 'La contraseña debe contener al menos una letra minúscula' };
+    return { valid: false, message: 'La contraseña debe contener al menos una letra minúscula' };
   }
   if (!hasNumber) {
-      return { valid: false, message: 'La contraseña debe contener al menos un número' };
+    return { valid: false, message: 'La contraseña debe contener al menos un número' };
   }
   if (!hasSpecialChar) {
-      return { valid: false, message: 'La contraseña debe contener al menos un carácter especial (!@#$%^&*...)' };
+    return { valid: false, message: 'La contraseña debe contener al menos un carácter especial (!@#$%^&*...)' };
   }
 
   return { valid: true };
@@ -38,6 +38,7 @@ type UserRow = RowDataPacket & {
   apellido: string;
   correo: string;
   passwordHash: string | null;
+  estadoCuenta?: string;
   cuentaVerificada?: boolean;
   codigoVerificacion?: string | null;
   codigoExpiracion?: Date | null;
@@ -55,14 +56,22 @@ const r = Router();
 r.post("/login", async (req: Request, res: Response) => {
   try {
     const { correo, password } = req.body as { correo: string; password: string };
-    
+
     const [rows] = await pool.query<UserRow[]>(
-      "SELECT id, nombre, apellido, correo, passwordHash FROM USUARIOS WHERE correo=? LIMIT 1",
+      "SELECT id, nombre, apellido, correo, passwordHash, estadoCuenta FROM USUARIOS WHERE correo=? LIMIT 1",
       [correo]
     );
-    
+
     const user = rows[0];
     if (!user) return res.status(401).json({ message: "Credenciales inválidas" });
+
+    // ✅ Verificar si la cuenta está suspendida ANTES de validar password
+    if (user.estadoCuenta === 'SUSPENDIDO') {
+      return res.status(403).json({
+        message: "Tu cuenta ha sido suspendida. Contacta al soporte para más información.",
+        suspended: true
+      });
+    }
 
     const hash = user.passwordHash ?? "";
     const ok = hash.startsWith("$2a$") || hash.startsWith("$2b$")
@@ -79,8 +88,8 @@ r.post("/login", async (req: Request, res: Response) => {
 
     const roles = rolesResult.map(r => r.nombre);
 
-    const payload: JWTPayload = { 
-      sub: user.id.toString(), 
+    const payload: JWTPayload = {
+      sub: user.id.toString(),
       rol: roles.join(",") // Guardar todos los roles en el token
     };
     const token = sign(payload);
@@ -103,13 +112,15 @@ r.post("/login", async (req: Request, res: Response) => {
 
 // REGISTER
 r.post("/register", async (req: Request, res: Response) => {
+  console.log("📝 === INICIO REGISTRO ===");
   try {
     const { nombre, apellido, correo, password, telefono, direccion } = req.body;
+    console.log("📧 Email recibido:", correo);
 
     // Validaciones básicas
     if (!nombre || !apellido || !correo || !password) {
       return res.status(400).json({ message: "Faltan campos requeridos" });
-    } 
+    }
 
     const passwordValidation = validatePasswordStrength(password);
     if (!passwordValidation.valid) {
@@ -117,14 +128,19 @@ r.post("/register", async (req: Request, res: Response) => {
     }
 
     // Verificar si el correo ya existe
+    console.log("🔍 Buscando email en BD:", correo);
     const [existing] = await pool.query<UserRow[]>(
       "SELECT id FROM USUARIOS WHERE correo = ? LIMIT 1",
       [correo]
     );
+    console.log("📊 Resultados búsqueda:", existing);
+    console.log("📏 Cantidad encontrada:", existing.length);
 
     if (existing.length > 0) {
+      console.log("❌ CORREO YA EXISTE - Rechazando registro");
       return res.status(409).json({ message: "El correo ya está registrado" });
     }
+    console.log("✅ Email disponible - Continuando registro");
 
     // Hash de la contraseña
     const hash = await bcrypt.hash(password, 10);
@@ -180,6 +196,30 @@ r.post("/send-verification", async (req: Request, res: Response) => {
     // Verificar si ya está verificado
     if (usuario.cuentaVerificada) {
       return res.status(400).json({ message: "La cuenta ya está verificada" });
+    }
+
+    // ✅ CHECK: Verificar si las credenciales de Gmail están configuradas
+    const gmailConfigured = !!(
+      process.env.OAUTH_CLIENT_ID &&
+      process.env.OAUTH_CLIENT_SECRET &&
+      process.env.OAUTH_REFRESH_TOKEN &&
+      process.env.GMAIL_USER
+    );
+
+    if (!gmailConfigured) {
+      console.warn("⚠️ Gmail OAuth no configurado. Auto-verificando cuenta...");
+
+      // Verificar automáticamente la cuenta
+      await pool.query(
+        "UPDATE USUARIOS SET cuentaVerificada = 1 WHERE id = ?",
+        [usuarioId]
+      );
+
+      return res.json({
+        message: "Cuenta verificada automáticamente (Email no configurado)",
+        autoVerified: true,
+        warning: "Configura Gmail OAuth2 en .env para habilitar verificación por email"
+      });
     }
 
     // Generar código de 6 dígitos
@@ -241,7 +281,7 @@ r.post("/verify-code", async (req: Request, res: Response) => {
 
     // ✅ BLOQUEO ABSOLUTO: Si no hay intentos, rechazar INMEDIATAMENTE
     if (intentosRestantes <= 0) {
-      return res.status(403).json({ 
+      return res.status(403).json({
         message: "Se agotaron los intentos. Solicita un nuevo código.",
         intentosRestantes: 0,
         bloqueado: true  // Bandera para el frontend
@@ -261,26 +301,26 @@ r.post("/verify-code", async (req: Request, res: Response) => {
     // Verificar si el código expiró
     const ahora = new Date();
     const expiracion = new Date(usuario.codigoExpiracion);
-    
+
     if (ahora > expiracion) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "El código de verificación ha expirado",
-        expirado: true 
+        expirado: true
       });
     }
 
     // Verificar el código
     if (usuario.codigoVerificacion !== codigo) {
       const nuevosIntentos = Math.max(0, intentosRestantes - 1);
-      
+
       await pool.query(
         "UPDATE USUARIOS SET intentosRestantes = ? WHERE id = ?",
         [nuevosIntentos, usuarioId]
       );
 
-      return res.status(400).json({ 
-        message: nuevosIntentos === 0 
-          ? "Se agotaron los intentos. Solicita un nuevo código." 
+      return res.status(400).json({
+        message: nuevosIntentos === 0
+          ? "Se agotaron los intentos. Solicita un nuevo código."
           : "Código de verificación inválido",
         intentosRestantes: nuevosIntentos,
         bloqueado: nuevosIntentos === 0
@@ -371,8 +411,8 @@ r.get("/estado-verificacion/:usuarioId", async (req: Request, res: Response) => 
     return res.json({
       intentosRestantes: usuario.intentosRestantes ?? 3,
       cuentaVerificada: usuario.cuentaVerificada,
-      codigoExpirado: usuario.codigoExpiracion 
-        ? new Date() > new Date(usuario.codigoExpiracion) 
+      codigoExpirado: usuario.codigoExpiracion
+        ? new Date() > new Date(usuario.codigoExpiracion)
         : false
     });
   } catch (error) {
@@ -409,7 +449,7 @@ r.post("/forgot-password", async (req: Request, res: Response) => {
 
     // Generar token único
     const resetToken = crypto.randomBytes(32).toString('hex');
-    
+
     // Expira en 1 hora
     const expiracion = new Date();
     expiracion.setHours(expiracion.getHours() + 1);

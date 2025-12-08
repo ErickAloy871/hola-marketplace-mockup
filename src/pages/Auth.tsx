@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { ShoppingCart, ArrowLeft } from "lucide-react";
+import { ShoppingCart, ArrowLeft, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
@@ -33,6 +34,8 @@ const Auth = () => {
   const [error, setError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showSuspendedModal, setShowSuspendedModal] = useState(false);
+  const [suspensionMessage, setSuspensionMessage] = useState("");
 
 
 
@@ -75,6 +78,15 @@ const Auth = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // ✅ Verificar si la cuenta está suspendida
+        if (response.status === 403 && errorData.suspended) {
+          setSuspensionMessage(errorData.message || "Tu cuenta ha sido suspendida. Contacta al soporte para más información.");
+          setShowSuspendedModal(true);
+          setLoading(false);
+          return;
+        }
+
         toast.error(errorData.message || 'Credenciales inválidas');
         setLoading(false);
         return;
@@ -154,6 +166,15 @@ const Auth = () => {
         const errorData = await sendVerificationResponse.json();
         toast.error('Error al enviar código de verificación');
         setLoading(false);
+        return;
+      }
+
+      const verificationData = await sendVerificationResponse.json();
+
+      // ✅ Si la cuenta fue auto-verificada (sin email configurado)
+      if (verificationData.autoVerified) {
+        toast.success("¡Registro exitoso! Tu cuenta ha sido verificada automáticamente.", { duration: 5000 });
+        navigate('/auth?tab=login');
         return;
       }
 
@@ -372,6 +393,34 @@ const Auth = () => {
         open={showForgotPassword}
         onOpenChange={setShowForgotPassword}
       />
+
+      {/* Modal de Cuenta Suspendida */}
+      <Dialog open={showSuspendedModal} onOpenChange={setShowSuspendedModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-3 rounded-full bg-red-100 dark:bg-red-900/20">
+                <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-500" />
+              </div>
+              <DialogTitle className="text-xl">Cuenta Suspendida</DialogTitle>
+            </div>
+            <DialogDescription className="text-base pt-2">
+              {suspensionMessage}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            <p className="text-sm text-muted-foreground">
+              Si crees que esto es un error, por favor contacta al equipo de soporte para resolver esta situación.
+            </p>
+            <Button
+              onClick={() => setShowSuspendedModal(false)}
+              className="w-full"
+            >
+              Entendido
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

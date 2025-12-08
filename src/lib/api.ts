@@ -11,7 +11,27 @@ export async function api(path: string, opts: RequestInit = {}) {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   const res = await fetch(API + path, { ...opts, headers });
-  if (!res.ok) throw new Error(await res.text());
+
+  // ✅ Si hay error, parseamos el JSON y lanzamos error con estructura similar a axios
+  if (!res.ok) {
+    const text = await res.text();
+    let errorData;
+
+    try {
+      errorData = JSON.parse(text);
+    } catch {
+      errorData = { message: text };
+    }
+
+    const error: any = new Error(errorData.message || 'Request failed');
+    error.response = {
+      status: res.status,
+      statusText: res.statusText,
+      data: errorData
+    };
+    throw error;
+  }
+
   return res.json();
 }
 export async function apiUpload(path: string, formData: FormData) {
