@@ -5,11 +5,30 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function ModalApelacion({ open, onClose, onSubmit }) {
   const [motivo, setMotivo] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // Limpia el texto cuando se cierre el modal
   useEffect(() => {
-    if (!open) setMotivo("");
+    if (!open) {
+      setMotivo("");
+      setLoading(false);
+    }
   }, [open]);
+
+  const enviar = async () => {
+    if (!motivo.trim() || loading) return;
+
+    setLoading(true);
+
+    try {
+      await onSubmit(motivo);
+      setMotivo("");
+      onClose();
+    } catch (err) {
+      console.error("Error al enviar apelación", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -21,31 +40,28 @@ export default function ModalApelacion({ open, onClose, onSubmit }) {
         </DialogHeader>
 
         <p className="text-gray-600 text-sm mb-3">
-          Explica detalladamente por qué consideras que tu producto no debería estar restringido.
-          El equipo de moderación revisará tu solicitud.
+          Explica por qué consideras que tu producto no debería estar restringido.
         </p>
 
-        {/* Caja de texto */}
         <Textarea
           rows={5}
           className="border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          placeholder="Describe las razones de tu apelación..."
+          placeholder="Describe tu apelación..."
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}
         />
 
-        {/* Botones */}
         <div className="flex justify-end gap-3 pt-4">
-          <Button variant="outline" onClick={onClose} className="px-4">
+          <Button variant="outline" onClick={onClose}>
             Cancelar
           </Button>
 
           <Button
-            onClick={() => onSubmit(motivo)}
-            disabled={!motivo.trim()}
-            className="px-4 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+            disabled={!motivo.trim() || loading}
+            onClick={enviar}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            Enviar apelación
+            {loading ? "Enviando..." : "Enviar apelación"}
           </Button>
         </div>
       </DialogContent>

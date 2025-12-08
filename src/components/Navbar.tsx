@@ -43,6 +43,12 @@ const Navbar = () => {
     if (!isAuthenticated) setTotalNoLeidos(0);
   }, [isAuthenticated, setTotalNoLeidos]);
 
+  useEffect(() => {
+    if (isAuthenticated && isAdmin) {
+      navigate("/admin");   // 🔥 Lo envía directo al panel
+    }
+  }, [isAuthenticated, isAdmin, navigate]);
+
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
       <div className="container mx-auto px-4">
@@ -58,24 +64,36 @@ const Navbar = () => {
           </div>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-6">
-            {(isVendedor || isComprador) && (
-              <button
-                onClick={() => navigate("/mis-productos")}
-                className="text-foreground hover:text-primary transition-colors font-medium"
-              >
-                Mis Productos
-              </button>
-            )}
+<div className="hidden md:flex items-center gap-6">
+  {/* SOLO mostrar al usuario normal (NO admin, NO moderador) */}
+  {!isAdmin && !isModerator && (
+    <>
+      {(isVendedor || isComprador) && (
+        <button
+          onClick={() => navigate("/mis-productos")}
+          className="text-foreground hover:text-primary transition-colors font-medium"
+        >
+          Mis Productos
+        </button>
+      )}
 
-            {/* Botón Mensajes SIN indicador */}
-            <button
-              className="text-foreground hover:text-primary transition-colors font-medium"
-              onClick={() => navigate("/mensajes")}
-            >
-              Mensajes
-            </button>
-          </div>
+
+
+      <button className="text-foreground hover:text-primary transition-colors font-medium">
+        Notificaciones
+      </button>
+
+      <button
+        className="text-foreground hover:text-primary transition-colors font-medium"
+        onClick={() => navigate("/mensajes")}
+      >
+        Mensajes
+      </button>
+    </>
+  )}
+</div>
+
+
 
           {/* Auth Section */}
           <div className="flex items-center gap-3">

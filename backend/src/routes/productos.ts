@@ -140,6 +140,9 @@ r.get("/", async (req: Request, res: Response) => {
 // ===============================
 // 1. OBTENER MIS PRODUCTOS
 // ===============================
+// ===============================
+// 1. OBTENER MIS PRODUCTOS + ESTADO DE APELACIÓN
+// ===============================
 r.get("/mis-productos", verifyToken, requireVendedor, async (req, res) => {
   try {
     const usuarioId = req.user?.id;
@@ -155,11 +158,19 @@ r.get("/mis-productos", verifyToken, requireVendedor, async (req, res) => {
          WHERE publicacionId = P.id 
          ORDER BY orden ASC LIMIT 1) AS foto,
 
-        EXISTS(
-          SELECT 1 FROM apelaciones_publicacion
-          WHERE publicacionId = P.id 
-          AND usuarioId = ?
-        ) AS apelacionEnviada
+        /* 
+          Trae el estado real de la apelación:
+          - NULL si nunca ha apelado
+          - PENDIENTE
+          - ACEPTADA
+          - RECHAZADA
+        */
+        (SELECT estado 
+         FROM apelaciones_publicacion 
+         WHERE publicacionId = P.id 
+           AND usuarioId = ?
+         ORDER BY fechaCreacion DESC
+         LIMIT 1) AS apelacionEstado
 
       FROM PUBLICACIONES P
       JOIN CATEGORIAS C ON C.id = P.categoriaId
@@ -170,11 +181,13 @@ r.get("/mis-productos", verifyToken, requireVendedor, async (req, res) => {
     );
 
     res.json(rows);
+
   } catch (error) {
     console.error("Error mis productos:", error);
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
+
 
 
 // ===============================
@@ -227,10 +240,7 @@ r.delete("/:id", verifyToken, requireVendedor, async (req: Request, res: Respons
 });
 
 // ===============================
-// 4. APELAR RESTRICCIÓN
-// ===============================
-// ===============================
-// 4. APELAR RESTRICCIÓN (versión final)
+// 4. APELAR RESTRICCIÓN (FINAL)
 // ===============================
 r.post("/:id/apelar", verifyToken, requireVendedor, async (req: Request, res: Response) => {
   try {
@@ -239,7 +249,7 @@ r.post("/:id/apelar", verifyToken, requireVendedor, async (req: Request, res: Re
     const { motivo } = req.body;
 
     if (!motivo || motivo.trim().length < 5) {
-      return res.status(400).json({ message: "El motivo es demasiado corto" });
+      return res.status(400).json({ message: "Motivo inválido" });
     }
 
     // 1️⃣ Verificar que la publicación sea del usuario
@@ -251,22 +261,34 @@ r.post("/:id/apelar", verifyToken, requireVendedor, async (req: Request, res: Re
     if (!pub.length)
       return res.status(403).json({ message: "No autorizado" });
 
-    // 2️⃣ Solo se puede apelar si está DADO_DE_BAJA
     if (pub[0].estado !== "DADO_DE_BAJA") {
-      return res.status(400).json({ message: "El producto no está dado de baja" });
+      return res.status(400).json({ message: "No se puede apelar: el producto no está dado de baja" });
     }
 
-    // 3️⃣ Verificar si ya apeló antes
-    const [yaApelo] = await pool.query<RowDataPacket[]>(
-      "SELECT id FROM apelaciones_publicacion WHERE publicacionId = ? AND usuarioId = ? LIMIT 1",
+    // 2️⃣ Revisar última apelación enviada
+    const [lastAppeal] = await pool.query<RowDataPacket[]>(
+      `SELECT estado 
+       FROM apelaciones_publicacion 
+       WHERE publicacionId = ? AND usuarioId = ?
+       ORDER BY fechaCreacion DESC
+       LIMIT 1`,
       [id, usuarioId]
     );
 
-    if (yaApelo.length > 0) {
-      return res.status(400).json({ message: "Ya enviaste una apelación para este producto" });
+    if (lastAppeal.length > 0) {
+      const estado = lastAppeal[0].estado;
+
+      if (estado === "PENDIENTE") {
+        return res.status(400).json({ message: "Ya tienes una apelación pendiente" });
+      }
+
+      // Si fue rechazada → PERMITIR NUEVA APELACIÓN
+      if (estado === "ACEPTADA") {
+        return res.status(400).json({ message: "Tu apelación ya fue aceptada" });
+      }
     }
 
-    // 4️⃣ Registrar apelación
+    // 3️⃣ Registrar nueva apelación
     await pool.query(
       `INSERT INTO apelaciones_publicacion (publicacionId, usuarioId, motivo, estado, fechaCreacion)
        VALUES (?, ?, ?, 'PENDIENTE', NOW())`,
@@ -280,6 +302,8 @@ r.post("/:id/apelar", verifyToken, requireVendedor, async (req: Request, res: Re
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
+
+
 
 
 
@@ -401,8 +425,9 @@ r.delete("/fotos/:fotoId", verifyToken, requireVendedor, async (req, res) => {
 
 
 
+
 // ===============================
-//  EDITAR PRODUCTO
+//  EDITAR PRODUCTO (con validación de precio)
 // ===============================
 r.patch("/:id", verifyToken, requireVendedor, async (req, res) => {
   try {
@@ -420,6 +445,17 @@ r.patch("/:id", verifyToken, requireVendedor, async (req, res) => {
     if (!rows.length)
       return res.status(403).json({ message: "No autorizado" });
 
+    // VALIDACIÓN DE PRECIO
+    const precioNum = Number(precio);
+
+    if (!precio || isNaN(precioNum)) {
+      return res.status(400).json({ message: "El precio debe ser un número válido" });
+    }
+
+    if (precioNum <= 0) {
+      return res.status(400).json({ message: "El precio debe ser mayor que 0" });
+    }
+
     await pool.query(
       `UPDATE PUBLICACIONES SET 
         nombre = ?, 
@@ -427,7 +463,7 @@ r.patch("/:id", verifyToken, requireVendedor, async (req, res) => {
         precio = ?, 
         ubicacion = ?
        WHERE id = ?`,
-      [nombre, descripcion, precio, ubicacion, id]
+      [nombre, descripcion, precioNum, ubicacion, id]
     );
 
     res.json({ message: "Producto actualizado correctamente" });
@@ -436,6 +472,7 @@ r.patch("/:id", verifyToken, requireVendedor, async (req, res) => {
     res.status(500).json({ message: "Error interno del servidor" });
   }
 });
+
 
 
 

@@ -156,10 +156,14 @@ export default function MisProductos() {
                   {p.estado === "DADO_DE_BAJA" ? (
                     <>
                       {/* Ya envió apelación */}
-                      {p.apelacionEnviada ? (
-                        <div className="text-red-600 font-medium">
-                          Apelación enviada
+                      {p.apelacionEstado === "PENDIENTE" ? (
+                        <div className="text-yellow-600 font-medium">Apelación pendiente</div>
+                      
+                      ) : p.apelacionEstado === "ACEPTADA" ? (
+                        <div className="text-green-600 font-medium">
+                          Apelación aceptada ✔
                         </div>
+
                       ) : (
                         <Button
                           className="bg-red-600 hover:bg-red-700 text-white"
@@ -174,44 +178,33 @@ export default function MisProductos() {
                       <Button
                         variant="secondary"
                         onClick={() => setProductoEditar(p)}
-                        className="flex items-center gap-2"
                       >
-                        <Pencil className="w-4 h-4" /> Editar
+                        Editar
                       </Button>
 
-                      <Button
-                        onClick={() => setProductoFotos(p.id)}
-                        className="flex items-center gap-2"
-                      >
-                        <ImagePlus className="w-4 h-4" /> Administrar Fotos
+                      <Button onClick={() => setProductoFotos(p.id)}>
+                        Administrar Fotos
                       </Button>
 
                       <Button
                         variant="outline"
                         onClick={() => cambiarVisibilidad(p)}
-                        className="flex items-center gap-2"
                       >
-                        {p.disponibilidad ? (
-                          <>
-                            <EyeOff className="w-4 h-4" /> Ocultar
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="w-4 h-4" /> Mostrar
-                          </>
-                        )}
+                        {p.disponibilidad ? "Ocultar" : "Mostrar"}
                       </Button>
 
                       <Button
                         variant="destructive"
                         onClick={() => eliminarProducto(p.id)}
-                        className="flex items-center gap-2"
                       >
-                        <Trash2 className="w-4 h-4" /> Eliminar
+                        Eliminar
                       </Button>
                     </>
                   )}
                 </div>
+
+
+
               </div>
             </Card>
           ))}
@@ -234,32 +227,31 @@ export default function MisProductos() {
         />
       )}
 
-      {/* MODAL DE APELACIÓN */}
       {productoApelar !== null && (
-        <ModalApelacion
-          open={true}
-          onClose={() => setProductoApelar(null)}
-          onSubmit={async (motivo) => {
-            try {
-              await api(`/productos/${productoApelar}/apelar`, {
-                method: "POST",
-                body: JSON.stringify({ motivo }),
-              });
+          <ModalApelacion
+            open={true}
+            onClose={() => setProductoApelar(null)}
+            onSubmit={async (motivo) => {
+              try {
+                await api(`/productos/${productoApelar}/apelar`, {
+                  method: "POST",
+                  body: JSON.stringify({ motivo }),
+                });
 
-              setProductoApelar(null);
+                setSuccessModal({
+                  title: "Apelación enviada",
+                  message: "Tu solicitud fue enviada correctamente.",
+                });
 
-              setSuccessModal({
-                title: "Apelación enviada",
-                message: "Tu solicitud fue enviada correctamente.",
-              });
+                cargarMisProductos();
+              } catch (error) {
+                console.error("Error apelando:", error);
+              }
+            }}
+          />
+        )}
 
-              cargarMisProductos();
-            } catch (error) {
-              console.error(error);
-            }
-          }}
-        />
-      )}
+
 
       {successModal && (
         <SuccessModal

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db.js";
 import { verifyToken, requireAdmin } from "../middleware/roleMiddleware.js";
+import type { RowDataPacket } from "mysql2";
 
 const router = Router();
 
@@ -21,7 +22,6 @@ router.get("/moderadores", async (req: Request, res: Response) => {
         u.telefono,
         u.direccion,
         u.estadoCuenta,
-        u.cuentaVerificada,
         u.fechaCreacion
       FROM usuarios u
       JOIN usuarios_roles ur ON ur.usuarioId = u.id
@@ -226,7 +226,6 @@ router.get("/usuarios-disponibles", async (req: Request, res: Response) => {
         u.telefono,
         u.direccion,
         u.estadoCuenta,
-        u.cuentaVerificada,
         u.fechaCreacion
       FROM usuarios u
       WHERE u.id NOT IN (
@@ -249,11 +248,318 @@ router.get("/usuarios-disponibles", async (req: Request, res: Response) => {
 
 
 
-
 /* ===========================================================
-   📗 PUBLICACIONES PARA CONFIGURAR TIEMPO
+   📗 PUBLICACIONES PARA CONFIGURAR TIEMPO (CON EXPIRACIÓN)
 =========================================================== */
 router.get("/publicaciones-configuracion", async (req: Request, res: Response) => {
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(`
+      SELECT 
+        p.id,
+        p.nombre,
+        p.descripcion,
+        p.precio,
+        p.estado,
+        p.fechaPublicacion,
+        p.ubicacion,
+
+        fp.urlFoto AS urlFoto,
+
+        -- Tiempo global (en segundos)
+        (
+          SELECT valor
+          FROM config
+          WHERE clave = 'TIEMPO_GLOBAL_PUBLICACION'
+          LIMIT 1
+        ) AS tiempoGlobal,
+
+        -- Tiempo individual (en segundos)
+        (
+          SELECT valor
+          FROM config
+          WHERE clave = 'TIEMPO_MAX_PUBLICACION'
+            AND publicacionId = p.id
+          LIMIT 1
+        ) AS tiempoPublicacion,
+
+        -- Segundos transcurridos
+        TIMESTAMPDIFF(SECOND, p.fechaPublicacion, NOW()) AS segundosTranscurridos
+
+      FROM publicaciones p
+      LEFT JOIN (
+        SELECT publicacionId, MIN(urlFoto) AS urlFoto
+        FROM fotos_publicacion
+        GROUP BY publicacionId
+      ) fp ON fp.publicacionId = p.id
+      ORDER BY p.id DESC
+    `);
+
+    const publicaciones = rows.map((p) => {
+
+      const tiempo = p.tiempoPublicacion || p.tiempoGlobal || null;
+
+      let expirado = false;
+      let tiempoRestante = null;
+
+      if (tiempo) {
+        expirado = p.segundosTranscurridos >= tiempo;
+        tiempoRestante = Math.max(0, tiempo - p.segundosTranscurridos);
+      }
+
+      return {
+        ...p,
+        tiempoEfectivo: tiempo,
+        tiempoRestante,
+        expirado,
+      };
+    });
+
+    res.json(publicaciones);
+  } catch (error) {
+    console.error("Error cargando publicaciones:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+
+/* ===========================================================
+   🔧 ACTUALIZAR TIEMPO PARA UNA PUBLICACIÓN (EN SEGUNDOS)
+=========================================================== */
+router.post("/publicaciones/:id/tiempo-publicacion", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { cantidad, unidad } = req.body;
+
+  if (!cantidad || cantidad < 1) {
+    return res.status(400).json({ message: "Cantidad inválida" });
+  }
+
+  const multipliers: Record<string, number> = {
+    s: 1,
+    m: 60,
+    h: 3600,
+    d: 86400
+  };
+
+  if (!multipliers[unidad]) {
+    return res.status(400).json({
+      message: "Unidad inválida. Use: s, m, h, d"
+    });
+  }
+
+  const segundos = cantidad * multipliers[unidad];
+
+  try {
+    await pool.query(
+      `
+      INSERT INTO config (clave, publicacionId, valor)
+      VALUES ('TIEMPO_MAX_PUBLICACION', ?, ?)
+      ON DUPLICATE KEY UPDATE valor = VALUES(valor)
+      `,
+      [id, segundos]
+    );
+
+    res.json({
+      message: `Tiempo actualizado (${cantidad}${unidad} = ${segundos} s)`,
+      segundos,
+    });
+  } catch (error) {
+    console.error("Error actualizando tiempo:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+
+
+/* ===========================================================
+   🟦 9. LISTAR COMPRADORES Y VENDEDORES
+=========================================================== */
+router.get("/usuarios-clientes", async (req: Request, res: Response) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        u.id,
+        u.nombre,
+        u.apellido,
+        u.correo,
+        u.telefono,
+        u.direccion,
+        u.estadoCuenta,
+        u.cuentaVerificada,
+        u.fechaCreacion,
+        GROUP_CONCAT(r.nombre) AS roles
+      FROM usuarios u
+      JOIN usuarios_roles ur ON ur.usuarioId = u.id
+      JOIN roles r ON r.id = ur.rolId
+      WHERE r.nombre IN ('COMPRADOR', 'VENDEDOR')
+      GROUP BY u.id
+      ORDER BY u.id DESC
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener usuarios clientes:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+/* ===========================================================
+   🟥 10. SUSPENDER USUARIO (COMPRADOR O VENDEDOR)
+=========================================================== */
+router.post("/usuarios/:id/suspender", async (req: Request, res: Response) => {
+  const usuarioId = req.params.id;
+  const { motivo } = req.body;
+
+  try {
+    await pool.query(
+      `UPDATE usuarios SET estadoCuenta = 'SUSPENDIDO' WHERE id = ?`,
+      [usuarioId]
+    );
+
+    await pool.query(
+      `INSERT INTO suspensiones (usuarioId, motivo, activa)
+       VALUES (?, ?, 1)`,
+      [usuarioId, motivo || "Suspensión administrativa"]
+    );
+
+    res.json({ message: "Usuario suspendido correctamente" });
+  } catch (error) {
+    console.error("Error al suspender usuario:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+/* ===========================================================
+   🟩 11. REACTIVAR USUARIO (COMPRADOR O VENDEDOR)
+=========================================================== */
+router.post("/usuarios/:id/reactivar", async (req: Request, res: Response) => {
+  const usuarioId = req.params.id;
+
+  try {
+    await pool.query(
+      `UPDATE usuarios SET estadoCuenta = 'ACTIVO' WHERE id = ?`,
+      [usuarioId]
+    );
+
+    await pool.query(
+      `UPDATE suspensiones SET activa = 0, fechaFin = NOW()
+       WHERE usuarioId = ? AND activa = 1`,
+      [usuarioId]
+    );
+
+    res.json({ message: "Usuario reactivado correctamente" });
+  } catch (error) {
+    console.error("Error al reactivar usuario:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+router.post("/dar-baja/:id", async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { motivo } = req.body;
+
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT id, estado FROM publicaciones WHERE id = ? LIMIT 1",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Publicación no encontrada" });
+    }
+
+    const pub = rows[0];
+
+    if (!["PUBLICADA", "PENDIENTE"].includes(pub.estado)) {
+      return res.status(400).json({
+        message: `No se puede dar de baja una publicación en estado ${pub.estado}`
+      });
+    }
+
+    await pool.query(
+      "UPDATE publicaciones SET estado = 'DADO_DE_BAJA' WHERE id = ?",
+      [id]
+    );
+
+    console.log(
+      `Publicación ${id} dada de baja. Motivo: ${motivo || "No especificado"}`
+    );
+
+    res.json({
+      message: "Publicación dada de baja exitosamente",
+      publicacionId: id
+    });
+  } catch (error) {
+    console.error("Error al dar de baja publicación:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+router.get("/apelaciones", async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT a.*, 
+             u.nombre AS usuarioNombre,
+             u.apellido AS usuarioApellido,
+             p.nombre AS publicacionNombre,
+             p.estado AS estadoPublicacion
+      FROM apelaciones_publicacion a
+      JOIN usuarios u ON u.id = a.usuarioId
+      JOIN publicaciones p ON p.id = a.publicacionId
+      ORDER BY a.fechaCreacion DESC
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error obteniendo apelaciones:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+
+router.post("/apelaciones/:id/aprobar", async (req, res) => {
+  const adminId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    // 1. Obtener apelación
+    const [rows]: any = await pool.query(
+      `SELECT * FROM apelaciones_publicacion WHERE id = ?`,
+      [id]
+    );
+
+    const apelacion = rows[0];
+
+    if (!apelacion) {
+      return res.status(404).json({ message: "Apelación no encontrada" });
+    }
+
+    // 2. Restaurar publicación
+    await pool.query(
+      `UPDATE publicaciones 
+       SET estado = 'PUBLICADA', razonRechazo = NULL
+       WHERE id = ?`,
+      [apelacion.publicacionId]
+    );
+
+    // 3. Actualizar estado de la apelación
+    await pool.query(
+      `UPDATE apelaciones_publicacion
+       SET estado = 'APROBADA',
+           revisadoPor = ?,
+           fechaRevision = NOW()
+       WHERE id = ?`,
+      [adminId, id]
+    );
+
+    res.json({ message: "Apelación aprobada correctamente." });
+
+  } catch (error) {
+    console.error("Error aprobando apelación:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+router.get("/publicaciones", async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
@@ -261,77 +567,106 @@ router.get("/publicaciones-configuracion", async (req: Request, res: Response) =
         p.nombre,
         p.descripcion,
         p.precio,
-        p.ubicacion,
         p.estado,
         p.fechaPublicacion,
-        p.esPeligrosa,
-
-        -- UNA FOTO POR PUBLICACIÓN (primera)
-        fp.urlFoto AS urlFoto,
-
-        pc.valor AS tiempoPublicacion,
-        gc.valor AS tiempoGlobal,
-        COALESCE(pc.valor, gc.valor) AS tiempoEfectivo
-
+        p.ubicacion,
+        COALESCE(fp.urlFoto, NULL) AS urlFoto
       FROM publicaciones p
-
       LEFT JOIN (
         SELECT publicacionId, MIN(urlFoto) AS urlFoto
         FROM fotos_publicacion
         GROUP BY publicacionId
       ) fp ON fp.publicacionId = p.id
-
-      LEFT JOIN config pc
-        ON pc.clave = 'TIEMPO_MAX_PUBLICACION_DIAS'
-       AND pc.publicacionId = p.id
-
-      LEFT JOIN config gc
-        ON gc.clave = 'TIEMPO_MAX_PUBLICACION_DIAS'
-       AND gc.publicacionId IS NULL
-
       ORDER BY p.id DESC
     `);
 
     res.json(rows);
   } catch (error) {
-    console.error("Error cargando publicaciones para configuración:", error);
+    console.error(error);
     res.status(500).json({ message: "Error del servidor" });
   }
 });
 
-/* ===========================================================
-   🔧 ACTUALIZAR TIEMPO PARA UNA PUBLICACIÓN
-=========================================================== */
-router.post(
-  "/publicaciones/:id/tiempo-publicacion",
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { dias } = req.body;
+router.post("/apelaciones/:id/rechazar", async (req, res) => {
+  const adminId = req.user!.id;
+  const { id } = req.params;
 
-    const diasNum = Number(dias);
-    if (!diasNum || diasNum < 1) {
-      return res.status(400).json({ message: "Días inválidos" });
-    }
+  try {
+    await pool.query(`
+      UPDATE apelaciones_publicacion
+      SET estado = 'RECHAZADA', revisadoPor = ?, fechaRevision = NOW()
+      WHERE id = ?
+    `, [adminId, id]);
 
-    try {
-      await pool.query(
-        `
-        INSERT INTO config (clave, publicacionId, valor)
-        VALUES ('TIEMPO_MAX_PUBLICACION_DIAS', ?, ?)
-        ON DUPLICATE KEY UPDATE valor = VALUES(valor)
-        `,
-        [id, diasNum]
-      );
-
-      res.json({ message: "Tiempo de publicación actualizado para esta publicación" });
-    } catch (error) {
-      console.error("Error actualizando tiempo de publicación:", error);
-      res.status(500).json({ message: "Error del servidor" });
-    }
+    res.json({ message: "Apelación rechazada correctamente." });
+  } catch (error) {
+    console.error("Error rechazando apelación:", error);
+    res.status(500).json({ message: "Error del servidor" });
   }
-);
+});
+
+
 
 export default router;
+
+function convertirATiempoMs(valor: string): number {
+  const cantidad = parseInt(valor);
+  const unidad = valor.replace(String(cantidad), ""); // s, m, h, d
+
+  const multipliers: any = {
+    s: 1000,
+    m: 60000,
+    h: 3600000,
+    d: 86400000,
+  };
+
+  return cantidad * multipliers[unidad];
+}
+
+
+import cron from "node-cron";
+
+// 🔥 CADA 1 MINUTO revisa expiraciones
+cron.schedule("* * * * *", async () => {
+  console.log("⏳ Revisando publicaciones expiradas...");
+
+  try {
+    const [rows]: any = await pool.query(`
+      SELECT 
+        p.id,
+        p.estado,
+        p.fechaPublicacion,
+        COALESCE(pc.valor, gc.valor) AS tiempo
+      FROM publicaciones p
+      LEFT JOIN config gc
+        ON gc.clave = 'TIEMPO_GLOBAL_PUBLICACION'
+      LEFT JOIN config pc
+        ON pc.clave = 'TIEMPO_MAX_PUBLICACION' AND pc.publicacionId = p.id
+      WHERE p.estado = 'PUBLICADA'
+    `);
+
+    for (const pub of rows) {
+      if (!pub.tiempo) continue;
+
+      const tiempoMs = convertirATiempoMs(pub.tiempo); // ejemplo: 5h → 5 * 3600000
+
+      const fechaPublicacion = new Date(pub.fechaPublicacion).getTime();
+      const ahora = Date.now();
+
+      if (ahora - fechaPublicacion >= tiempoMs) {
+        console.log(`⚠ Publicación ${pub.id} EXPIRÓ → DADO_DE_BAJA`);
+
+        await pool.query(
+          "UPDATE publicaciones SET estado = 'DADO_DE_BAJA' WHERE id = ?",
+          [pub.id]
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Error revisando expiraciones:", error);
+  }
+});
+
 
 
 
