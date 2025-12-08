@@ -43,49 +43,65 @@ const Navbar = () => {
     if (!isAuthenticated) setTotalNoLeidos(0);
   }, [isAuthenticated, setTotalNoLeidos]);
 
+  useEffect(() => {
+  if (isAuthenticated && isAdmin) {
+    navigate("/admin");
+  }
+
+  if (isAuthenticated && isModerator) {
+    navigate("/moderation");
+  }
+}, [isAuthenticated, isAdmin, isModerator, navigate]);
 
 
+  
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div
-            className="flex items-center gap-2 cursor-pointer"
-            onClick={() => navigate("/")}
-          >
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => {
+            if (isAdmin) return navigate("/admin");
+            if (isModerator) return navigate("/moderation");
+            return navigate("/");
+          }}
+        >
+
             <div className="w-10 h-10 bg-gradient-to-br from-primary to-accent rounded-lg flex items-center justify-center shadow-sm">
               <ShoppingCart className="w-6 h-6 text-white" />
             </div>
           </div>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-6">
-            {/* SOLO mostrar al usuario normal (NO admin, NO moderador) */}
-            {!isAdmin && !isModerator && (
-              <>
-                {(isVendedor || isComprador) && (
-                  <button
-                    onClick={() => navigate("/mis-productos")}
-                    className="text-foreground hover:text-primary transition-colors font-medium"
-                  >
-                    Mis Productos
-                  </button>
-                )}
+<div className="hidden md:flex items-center gap-6">
+  {/* SOLO mostrar al usuario normal (NO admin, NO moderador) */}
+  {!isAdmin && !isModerator && (
+    <>
+      {(isVendedor || isComprador) && (
+        <button
+          onClick={() => navigate("/mis-productos")}
+          className="text-foreground hover:text-primary transition-colors font-medium"
+        >
+          Mis Productos
+        </button>
+      )}
 
-                <button className="text-foreground hover:text-primary transition-colors font-medium">
-                  Notificaciones
-                </button>
+      <button className="text-foreground hover:text-primary transition-colors font-medium">
+        Notificaciones
+      </button>
 
-                <button
-                  className="text-foreground hover:text-primary transition-colors font-medium"
-                  onClick={() => navigate("/mensajes")}
-                >
-                  Mensajes
-                </button>
-              </>
-            )}
-          </div>
+      <button
+        className="text-foreground hover:text-primary transition-colors font-medium"
+        onClick={() => navigate("/mensajes")}
+      >
+        Mensajes
+      </button>
+    </>
+  )}
+</div>
+
 
           {/* Auth Section */}
           <div className="flex items-center gap-3">
@@ -114,7 +130,7 @@ const Navbar = () => {
                     </div>
 
                     {/* ✅ EDITAR PERFIL - OCULTO PARA ADMINISTRADORES */}
-                    {!isAdmin && (
+                    {!isAdmin && !isModerator && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => navigate("/profile/edit")}>
@@ -147,16 +163,7 @@ const Navbar = () => {
                       </>
                     )}
 
-                    {/* ✅ PANEL DE MODERACIÓN - SOLO PARA MODERADORES (no admins) */}
-                    {!isAdmin && isModerator && (
-                      <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => navigate("/moderation")}>
-                          <Shield className="mr-2 h-4 w-4 text-blue-600" />
-                          <span className="text-blue-600">Panel de Moderación</span>
-                        </DropdownMenuItem>
-                      </>
-                    )}
+                    
 
                     {!isModerator &&
                       !isAdmin &&

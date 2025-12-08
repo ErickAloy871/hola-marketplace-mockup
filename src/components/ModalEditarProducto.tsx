@@ -8,42 +8,41 @@ export default function ModalEditarProducto({ producto, onClose, onUpdated }) {
   // -------------------------------
   // VALIDACIÓN DEL PRECIO
   // -------------------------------
-  const handlePrecioChange = (value: string) => {
-  // Convertir coma a punto
-  let limpio = value.replace(",", ".");
+  const handlePrecioChange = (raw: string) => {
+  // Reemplazar coma por punto para uniformar
+  let value = raw.replace(",", ".");
 
-  // Eliminar cualquier carácter que NO sea dígito o punto
-  limpio = limpio.replace(/[^0-9.]/g, "");
-
-  // Si había letras, el replace las elimina, pero que NO permita "123a456" → "123456"
-  // Ponemos una regla: si el input original tenía letras, NO aceptamos ese valor
-  if (/[a-zA-Z]/.test(value)) {
-    return; // ignora la escritura
+  // Solo dígitos y un punto decimal
+  if (!/^\d*\.?\d*$/.test(value)) {
+    return; // si mete letras u otros símbolos, no actualizamos
   }
 
-  // Evita múltiples puntos decimales
-  const partes = limpio.split(".");
-  if (partes.length > 2) {
-    limpio = partes[0] + "." + partes[1];
-  }
-
-  // Limitar a dos decimales
-  if (partes[1]?.length > 2) {
-    limpio = partes[0] + "." + partes[1].slice(0, 2);
-  }
-
-  // Convertir a número
-  const numero = Number(limpio);
-
-  // Si es inválido o negativo → limpiar
-  if (isNaN(numero) || numero < 0) {
+  // Si está vacío, simplemente limpiamos el precio
+  if (value === "") {
     setForm({ ...form, precio: "" });
     return;
   }
 
-  // Guardar
-  setForm({ ...form, precio: limpio });
+  const numero = Number(value);
+
+  // Evitar NaN y negativos
+  if (isNaN(numero) || numero < 0) {
+    return;
+  }
+
+  // Limitar a 2 decimales
+  if (value.includes(".")) {
+    const [entero, decimal] = value.split(".");
+    if (decimal.length > 2) {
+      return; // no permitir más de 2 decimales
+    }
+  }
+
+  // Guardamos el valor tal cual se escribe (como string),
+  // el backend lo convierte a DECIMAL sin problema
+  setForm({ ...form, precio: value });
 };
+
 
 
   // -------------------------------
@@ -131,11 +130,13 @@ export default function ModalEditarProducto({ producto, onClose, onUpdated }) {
             <input
               type="text"
               inputMode="decimal"
-              placeholder="Ej: 25.50"
-              className="w-full border rounded-xl px-3 py-2 shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
               value={form.precio}
+              placeholder="Ej: 25.50"
               onChange={(e) => handlePrecioChange(e.target.value)}
+              className="w-full mt-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg px-3 py-2 shadow-sm"
             />
+
+
 
             {/* Mensaje de error */}
             {(!form.precio || Number(form.precio) <= 0) && (
