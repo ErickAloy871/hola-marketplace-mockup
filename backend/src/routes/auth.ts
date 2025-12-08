@@ -586,5 +586,177 @@ r.get("/profile/:usuarioId", async (req: Request, res: Response) => {
   }
 });
 
+// ✅ DELETE ACCOUNT - ELIMINACIÓN FÍSICA GARANTIZADA
+r.delete("/delete-account", async (req: Request, res: Response) => {
+  const connection = await pool.getConnection();
+  
+  try {
+    const { usuarioId } = req.body;
+
+    if (!usuarioId) {
+      connection.release();
+      return res.status(400).json({ message: "usuarioId es requerido" });
+    }
+
+    // Verificar que el usuario existe
+    const [usuarios] = await connection.query<UserRow[]>(
+      "SELECT id, nombre, correo FROM USUARIOS WHERE id = ? LIMIT 1",
+      [usuarioId]
+    );
+
+    if (usuarios.length === 0) {
+      connection.release();
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    // Verificar roles del usuario (NO permitir a moderadores ni admins)
+    const [rolesResult] = await connection.query<RolRow[]>(
+      "SELECT r.id, r.nombre FROM usuarios_roles ur JOIN roles r ON ur.rolId = r.id WHERE ur.usuarioId = ?",
+      [usuarioId]
+    );
+
+    const roles = rolesResult.map(r => r.nombre.toUpperCase());
+    
+    // Bloquear si es MODERADOR o ADMINISTRADOR
+    if (roles.includes("MODERADOR") || roles.includes("ADMINISTRADOR")) {
+      connection.release();
+      return res.status(403).json({ 
+        message: "Los moderadores y administradores no pueden eliminar su cuenta desde aquí. Contacta al administrador del sistema." 
+      });
+    }
+
+    // Verificar que sea COMPRADOR o VENDEDOR
+    if (!roles.includes("COMPRADOR") && !roles.includes("VENDEDOR")) {
+      connection.release();
+      return res.status(403).json({ 
+        message: "No tienes permisos para realizar esta acción" 
+      });
+    }
+
+    console.log(`🗑️ Iniciando eliminación del usuario ${usuarioId} (${usuarios[0].nombre} - ${usuarios[0].correo})`);
+
+    // ✅ DESACTIVAR VERIFICACIONES DE FOREIGN KEY TEMPORALMENTE
+    await connection.query("SET FOREIGN_KEY_CHECKS = 0");
+
+    try {
+      // 1. Eliminar reportes donde el usuario es revisor
+      await connection.query(
+        "UPDATE reportes_publicaciones SET revisadoPor = NULL WHERE revisadoPor = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Reportes actualizados`);
+
+      // 2. Eliminar apelaciones creadas por el usuario
+      await connection.query(
+        "DELETE FROM apelaciones_publicacion WHERE usuarioId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Apelaciones eliminadas`);
+
+      // 3. Eliminar apelaciones revisadas por el usuario
+      await connection.query(
+        "UPDATE apelaciones_publicacion SET revisadoPor = NULL WHERE revisadoPor = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Apelaciones revisadas actualizadas`);
+
+      // 4. Eliminar mensajes
+      await connection.query(
+        "DELETE FROM mensajes WHERE remitenteId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Mensajes eliminados`);
+
+      // 5. Eliminar conversaciones
+      await connection.query(
+        "DELETE FROM conversaciones WHERE usuario1Id = ? OR usuario2Id = ?",
+        [usuarioId, usuarioId]
+      );
+      console.log(`  ✓ Conversaciones eliminadas`);
+
+      // 6. Eliminar productos interesados
+      await connection.query(
+        "DELETE FROM productos_interesados WHERE usuarioId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Productos interesados eliminados`);
+
+      // 7. Eliminar reportes de publicaciones
+      await connection.query(
+        "DELETE FROM reportes_publicaciones WHERE usuarioId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Reportes de publicaciones eliminados`);
+
+      // 8. Eliminar fotos de publicaciones del usuario
+      await connection.query(
+        "DELETE FROM fotos_publicacion WHERE publicacionId IN (SELECT id FROM publicaciones WHERE usuarioId = ?)",
+        [usuarioId]
+      );
+      console.log(`  ✓ Fotos de publicaciones eliminadas`);
+
+      // 9. Eliminar publicaciones
+      await connection.query(
+        "DELETE FROM publicaciones WHERE usuarioId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Publicaciones eliminadas`);
+
+      // 10. Eliminar suspensiones
+      await connection.query(
+        "DELETE FROM suspensiones WHERE usuarioId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Suspensiones eliminadas`);
+
+      // 11. Eliminar roles del usuario
+      await connection.query(
+        "DELETE FROM usuarios_roles WHERE usuarioId = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Roles de usuario eliminados`);
+
+      // 12. FINALMENTE, ELIMINAR EL USUARIO
+      const [deleteResult] = await connection.query(
+        "DELETE FROM USUARIOS WHERE id = ?",
+        [usuarioId]
+      );
+      console.log(`  ✓ Usuario eliminado de la tabla USUARIOS`);
+
+      // Verificar que realmente se eliminó
+      const [verificacion] = await connection.query<UserRow[]>(
+        "SELECT id FROM USUARIOS WHERE id = ? LIMIT 1",
+        [usuarioId]
+      );
+
+      if (verificacion.length > 0) {
+        throw new Error("El usuario no fue eliminado correctamente");
+      }
+
+      console.log(`✅ Usuario ${usuarioId} (${usuarios[0].nombre}) ELIMINADO COMPLETAMENTE`);
+
+    } finally {
+      // ✅ REACTIVAR VERIFICACIONES DE FOREIGN KEY
+      await connection.query("SET FOREIGN_KEY_CHECKS = 1");
+    }
+
+    connection.release();
+
+    return res.json({
+      message: "Tu cuenta ha sido eliminada exitosamente",
+      success: true
+    });
+
+  } catch (error) {
+    await connection.query("SET FOREIGN_KEY_CHECKS = 1");
+    connection.release();
+    
+    console.error("❌ delete-account error:", error);
+    return res.status(500).json({
+      message: "Error al eliminar la cuenta",
+      error: error instanceof Error ? error.message : "Error desconocido"
+    });
+  }
+});
 
 export default r;

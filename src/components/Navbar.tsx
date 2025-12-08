@@ -43,11 +43,14 @@ const Navbar = () => {
     if (!isAuthenticated) setTotalNoLeidos(0);
   }, [isAuthenticated, setTotalNoLeidos]);
 
+  // ✅ REDIRECT AUTOMÁTICO PARA ADMIN Y MODERADORES
   useEffect(() => {
     if (isAuthenticated && isAdmin) {
-      navigate("/admin");   // 🔥 Lo envía directo al panel
+      navigate("/admin");   // Admin va a panel de administración
+    } else if (isAuthenticated && isModerator && !isAdmin) {
+      navigate("/moderation"); // Moderador va a panel de moderación
     }
-  }, [isAuthenticated, isAdmin, navigate]);
+  }, [isAuthenticated, isAdmin, isModerator, navigate]);
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">
@@ -64,36 +67,32 @@ const Navbar = () => {
           </div>
 
           {/* Navigation Links */}
-<div className="hidden md:flex items-center gap-6">
-  {/* SOLO mostrar al usuario normal (NO admin, NO moderador) */}
-  {!isAdmin && !isModerator && (
-    <>
-      {(isVendedor || isComprador) && (
-        <button
-          onClick={() => navigate("/mis-productos")}
-          className="text-foreground hover:text-primary transition-colors font-medium"
-        >
-          Mis Productos
-        </button>
-      )}
+          <div className="hidden md:flex items-center gap-6">
+            {/* SOLO mostrar al usuario normal (NO admin, NO moderador) */}
+            {!isAdmin && !isModerator && (
+              <>
+                {(isVendedor || isComprador) && (
+                  <button
+                    onClick={() => navigate("/mis-productos")}
+                    className="text-foreground hover:text-primary transition-colors font-medium"
+                  >
+                    Mis Productos
+                  </button>
+                )}
 
+                <button className="text-foreground hover:text-primary transition-colors font-medium">
+                  Notificaciones
+                </button>
 
-
-      <button className="text-foreground hover:text-primary transition-colors font-medium">
-        Notificaciones
-      </button>
-
-      <button
-        className="text-foreground hover:text-primary transition-colors font-medium"
-        onClick={() => navigate("/mensajes")}
-      >
-        Mensajes
-      </button>
-    </>
-  )}
-</div>
-
-
+                <button
+                  className="text-foreground hover:text-primary transition-colors font-medium"
+                  onClick={() => navigate("/mensajes")}
+                >
+                  Mensajes
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Auth Section */}
           <div className="flex items-center gap-3">
@@ -121,12 +120,16 @@ const Navbar = () => {
                       {user?.correo}
                     </div>
 
-                    <DropdownMenuSeparator />
-
-                    <DropdownMenuItem onClick={() => navigate("/profile/edit")}>
-                      <User className="mr-2 h-4 w-4" />
-                      Editar perfil
-                    </DropdownMenuItem>
+                    {/* ✅ EDITAR PERFIL - OCULTO PARA ADMINISTRADORES */}
+                    {!isAdmin && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => navigate("/profile/edit")}>
+                          <User className="mr-2 h-4 w-4" />
+                          Editar perfil
+                        </DropdownMenuItem>
+                      </>
+                    )}
 
                     {(isComprador || isVendedor) && !isAdmin && !isModerator && (
                       <>
@@ -151,41 +154,37 @@ const Navbar = () => {
                       </>
                     )}
 
-                    <DropdownMenuSeparator />
-
-                    {isAdmin && (
-                      <DropdownMenuItem onClick={() => navigate("/admin")}>
-                        <Shield className="mr-2 h-4 w-4 text-emerald-600" />
-                        <span className="text-emerald-600">
-                          Panel de Administrador
-                        </span>
-                      </DropdownMenuItem>
-                    )}
-
+                    {/* ✅ PANEL DE MODERACIÓN - SOLO PARA MODERADORES (no admins) */}
                     {!isAdmin && isModerator && (
-                      <DropdownMenuItem onClick={() => navigate("/moderation")}>
-                        <Shield className="mr-2 h-4 w-4 text-blue-600" />
-                        <span className="text-blue-600">Panel de Moderación</span>
-                      </DropdownMenuItem>
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => navigate("/moderation")}>
+                          <Shield className="mr-2 h-4 w-4 text-blue-600" />
+                          <span className="text-blue-600">Panel de Moderación</span>
+                        </DropdownMenuItem>
+                      </>
                     )}
 
                     {!isModerator &&
                       !isAdmin &&
                       user?.roles?.includes("COMPRADOR") &&
                       !user?.roles?.includes("VENDEDOR") && (
-                        <DropdownMenuItem
-                          onClick={() =>
-                            window.dispatchEvent(
-                              new CustomEvent("open-sell-modal")
-                            )
-                          }
-                          className="text-green-600"
-                        >
-                          Empezar a vender
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() =>
+                              window.dispatchEvent(
+                                new CustomEvent("open-sell-modal")
+                              )
+                            }
+                            className="text-green-600"
+                          >
+                            Empezar a vender
+                          </DropdownMenuItem>
+                        </>
                       )}
 
-                    {(isModerator || isAdmin) && <DropdownMenuSeparator />}
+                    <DropdownMenuSeparator />
 
                     <DropdownMenuItem
                       onClick={handleLogout}

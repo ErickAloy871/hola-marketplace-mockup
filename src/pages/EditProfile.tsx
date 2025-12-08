@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, User, Save } from 'lucide-react';
+import { ArrowLeft, User, Save, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,17 +10,19 @@ import Navbar from '@/components/Navbar';
 
 export default function EditProfile() {
     const navigate = useNavigate();
-    const { user, login, isAuthenticated } = useAuth();
+    const { user, login, logout } = useAuth();
 
     const [loading, setLoading] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [nombre, setNombre] = useState('');
     const [apellido, setApellido] = useState('');
     const [telefono, setTelefono] = useState('');
     const [direccion, setDireccion] = useState('');
+    const [canDeleteAccount, setCanDeleteAccount] = useState(false);
 
     // Cargar datos del usuario actual
     useEffect(() => {
-        // Validar autenticación desde localStorage
         const token = localStorage.getItem('token');
         const userStr = localStorage.getItem('user');
 
@@ -30,7 +32,32 @@ export default function EditProfile() {
             return;
         }
 
-        // Cargar datos del usuario
+        // ✅ VERIFICAR ROLES DEL USUARIO
+        try {
+            const userData = JSON.parse(userStr);
+            const userRoles = userData.roles || [];
+            
+            // Convertir roles a mayúsculas para comparación
+            const rolesUpperCase = userRoles.map((r: string) => r.toUpperCase());
+            
+            // Solo puede eliminar cuenta si es COMPRADOR o VENDEDOR
+            // Y NO es MODERADOR ni ADMINISTRADOR
+            const isModerador = rolesUpperCase.includes('MODERADOR');
+            const isAdmin = rolesUpperCase.includes('ADMINISTRADOR');
+            const isComprador = rolesUpperCase.includes('COMPRADOR');
+            const isVendedor = rolesUpperCase.includes('VENDEDOR');
+            
+            // Puede eliminar si es comprador/vendedor Y NO es moderador/admin
+            const canDelete = (isComprador || isVendedor) && !isModerador && !isAdmin;
+            setCanDeleteAccount(canDelete);
+            
+            console.log('Roles del usuario:', userRoles);
+            console.log('Puede eliminar cuenta:', canDelete);
+        } catch (e) {
+            console.error('Error al verificar roles:', e);
+            setCanDeleteAccount(false);
+        }
+
         const fetchUserData = async () => {
             try {
                 const userData = JSON.parse(userStr);
@@ -47,13 +74,11 @@ export default function EditProfile() {
                     setTelefono(data.telefono || '');
                     setDireccion(data.direccion || '');
                 } else {
-                    // Si falla el endpoint, usar datos de localStorage
                     setNombre(userData.nombre || '');
                     setApellido(userData.apellido || '');
                 }
             } catch (error) {
                 console.error('Error al cargar datos:', error);
-                // Usar datos de localStorage como fallback
                 try {
                     const userData = JSON.parse(userStr);
                     setNombre(userData.nombre || '');
@@ -100,9 +125,7 @@ export default function EditProfile() {
             const data = await response.json();
 
             if (response.ok && data.success) {
-                // Actualizar el contexto de usuario
                 login(token!, data.usuario);
-
                 toast.success('¡Perfil actualizado exitosamente!');
                 setTimeout(() => navigate('/'), 1500);
             } else {
@@ -113,6 +136,51 @@ export default function EditProfile() {
             toast.error('Error de conexión');
         } finally {
             setLoading(false);
+        }
+    };
+
+    // FUNCIÓN: Eliminar cuenta
+    const handleDeleteAccount = async () => {
+        setDeleting(true);
+
+        try {
+            const token = localStorage.getItem('token');
+            const userStr = localStorage.getItem('user');
+            const userData = JSON.parse(userStr!);
+
+            const response = await fetch('http://localhost:4000/api/auth/delete-account', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    usuarioId: userData.id
+                })
+            });
+
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                toast.success('Tu cuenta ha sido eliminada exitosamente');
+                
+                // Cerrar sesión y limpiar datos
+                logout();
+                
+                // Redirigir al login después de 2 segundos
+                setTimeout(() => {
+                    navigate('/auth?tab=login');
+                }, 2000);
+            } else {
+                toast.error(data.message || 'Error al eliminar cuenta');
+                setShowDeleteConfirm(false);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            toast.error('Error de conexión');
+            setShowDeleteConfirm(false);
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -250,20 +318,84 @@ export default function EditProfile() {
                                     variant="outline"
                                     onClick={() => navigate('/')}
                                     className="flex-1"
-                                    disabled={loading}
+                                    disabled={loading || deleting}
                                 >
                                     Cancelar
                                 </Button>
                                 <Button
                                     type="submit"
                                     className="flex-1 bg-primary hover:bg-primary/90 text-white font-semibold"
-                                    disabled={loading}
+                                    disabled={loading || deleting}
                                 >
                                     <Save className="w-4 h-4 mr-2" />
                                     {loading ? 'Guardando...' : 'Guardar Cambios'}
                                 </Button>
                             </div>
                         </form>
+
+                        {/* ✅ SECCIÓN DE ZONA PELIGROSA - SOLO SI PUEDE ELIMINAR */}
+                        {canDeleteAccount && (
+                            <div className="mt-8 pt-8 border-t-2 border-destructive/20">
+                                <div className="space-y-4">
+                                    <div className="flex items-start gap-3">
+                                        <AlertTriangle className="w-5 h-5 text-destructive mt-0.5" />
+                                        <div>
+                                            <h3 className="text-lg font-bold text-destructive">
+                                                Zona Peligrosa
+                                            </h3>
+                                            <p className="text-sm text-muted-foreground mt-1">
+                                                Una vez que elimines tu cuenta, no hay vuelta atrás. Por favor, está seguro.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {!showDeleteConfirm ? (
+                                        <Button
+                                            type="button"
+                                            variant="destructive"
+                                            onClick={() => setShowDeleteConfirm(true)}
+                                            disabled={loading || deleting}
+                                            className="w-full"
+                                        >
+                                            <Trash2 className="w-4 h-4 mr-2" />
+                                            Eliminar mi cuenta
+                                        </Button>
+                                    ) : (
+                                        <div className="bg-destructive/10 border-2 border-destructive rounded-lg p-4 space-y-4">
+                                            <div className="text-center">
+                                                <p className="font-bold text-destructive mb-2">
+                                                    ⚠️ ¿Estás completamente seguro?
+                                                </p>
+                                                <p className="text-sm text-foreground">
+                                                    Esta acción es <strong>permanente</strong> y no se puede deshacer.
+                                                    Todos tus datos serán eliminados.
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-3">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() => setShowDeleteConfirm(false)}
+                                                    disabled={deleting}
+                                                    className="flex-1"
+                                                >
+                                                    Cancelar
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="destructive"
+                                                    onClick={handleDeleteAccount}
+                                                    disabled={deleting}
+                                                    className="flex-1 font-bold"
+                                                >
+                                                    {deleting ? 'Eliminando...' : 'Sí, eliminar definitivamente'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

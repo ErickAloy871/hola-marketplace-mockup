@@ -33,10 +33,19 @@ const ProductDetail = () => {
   const [esFavorito, setEsFavorito] = useState(false);
   const [loadingFavorito, setLoadingFavorito] = useState(false);
 
-  // Verificar si el usuario puede usar "me interesa"
   const puedeUsarIntereses = () => {
     if (!user?.roles) return false;
     return user.roles.includes("COMPRADOR") || user.roles.includes("VENDEDOR");
+  };
+
+  // ✅ NUEVO: verificar si es admin/moderador
+  const esAdminOModerador = () => {
+    if (!user?.roles) return false;
+    return (
+      user.roles.includes("ADMINISTRADOR") ||
+      user.roles.includes("MODERADOR") ||
+      user.roles.includes("ADMIN")
+    );
   };
 
   useEffect(() => {
@@ -125,7 +134,6 @@ const ProductDetail = () => {
     }
   };
 
-  // ✅ NUEVO: iniciar chat desde la publicación
   const handleEnviarMensaje = async () => {
     if (!product || !id) return;
 
@@ -142,11 +150,13 @@ const ProductDetail = () => {
     try {
       const res = await chatApi.crearConversacionDesdePublicacion(Number(id));
       navigate(`/mensajes?conv=${res.conversacionId}`);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error creando conversación desde publicación:", err);
       toast({
         title: "Error",
-        description: "No se pudo iniciar la conversación con el vendedor",
+        description:
+          err?.response?.data?.message ||
+          "No se pudo iniciar la conversación con el vendedor",
         variant: "destructive",
       });
     }
@@ -189,7 +199,6 @@ const ProductDetail = () => {
       <Navbar />
 
       <main className="flex-1 container mx-auto px-4 py-8">
-        {/* Botón volver */}
         <Button
           variant="ghost"
           onClick={() => navigate(-1)}
@@ -200,7 +209,6 @@ const ProductDetail = () => {
         </Button>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Galería de imágenes */}
           <div>
             <ImageGallery
               images={product.imagenes || (product.urlFoto ? [product.urlFoto] : [])}
@@ -208,7 +216,6 @@ const ProductDetail = () => {
             />
           </div>
 
-          {/* Información del producto */}
           <div className="space-y-6">
             <div className="flex justify-between items-start">
               <div>
@@ -220,7 +227,6 @@ const ProductDetail = () => {
                 </p>
               </div>
 
-              {/* Botón Me interesa */}
               {puedeUsarIntereses() && (
                 <Button
                   variant={esFavorito ? "default" : "outline"}
@@ -238,7 +244,6 @@ const ProductDetail = () => {
               )}
             </div>
 
-            {/* Detalles */}
             <div className="space-y-3 border-t border-b border-border py-4">
               {product.categoria && (
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -254,7 +259,6 @@ const ProductDetail = () => {
               )}
             </div>
 
-            {/* Descripción */}
             <div>
               <h2 className="text-lg font-semibold mb-2 text-foreground">
                 Descripción
@@ -266,20 +270,21 @@ const ProductDetail = () => {
 
             {/* Botones de acción */}
             <div className="space-y-3 pt-4">
-              <Button
-                className="w-full h-12 bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white font-medium"
-                onClick={handleEnviarMensaje}
-              >
-                Enviar mensaje
-              </Button>
+              {/* ✅ Solo mostrar botón si NO es admin/moderador */}
+              {!esAdminOModerador() && (
+                <Button
+                  className="w-full h-12 bg-gradient-to-r from-primary to-accent hover:opacity-90 text-white font-medium"
+                  onClick={handleEnviarMensaje}
+                >
+                  Enviar mensaje
+                </Button>
+              )}
 
-              {/* Botón de reporte */}
               <div className="flex justify-center">
                 <ReportDialog publicacionId={product.id} />
               </div>
             </div>
 
-            {/* Advertencia de seguridad */}
             <div className="bg-muted/50 border border-border rounded-lg p-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
                 ⚠️ <strong>Consejo de seguridad:</strong> Nunca realices pagos

@@ -1,17 +1,19 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db.js";
-import { verifyToken, requireAdmin } from "../middleware/roleMiddleware.js";
+import { verifyToken, requireAdmin, requireModeratorOrAdmin } from "../middleware/roleMiddleware.js";
 import type { RowDataPacket } from "mysql2";
 
 const router = Router();
 
-// Todas las rutas aquí → requieren login y ser ADMIN
-router.use(verifyToken, requireAdmin);
+// ✅ TODAS las rutas requieren estar autenticado
+router.use(verifyToken);
 
 /* ===========================================================
-   🟦 1. LISTAR MODERADORES
+   🔴 RUTAS SOLO PARA ADMINISTRADORES
 =========================================================== */
-router.get("/moderadores", async (req: Request, res: Response) => {
+
+// 1. LISTAR MODERADORES (SOLO ADMIN)
+router.get("/moderadores", requireAdmin, async (req: Request, res: Response) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
@@ -37,16 +39,11 @@ router.get("/moderadores", async (req: Request, res: Response) => {
   }
 });
 
-
-/* ===========================================================
-   🟩 2. REGISTRAR NUEVO MODERADOR
-=========================================================== */
-
-router.post("/moderadores", async (req: Request, res: Response) => {
+// 2. REGISTRAR NUEVO MODERADOR (SOLO ADMIN)
+router.post("/moderadores", requireAdmin, async (req: Request, res: Response) => {
   const { usuarioId } = req.body;
 
   try {
-    // 1) Quitar roles de COMPRADOR y VENDEDOR
     await pool.query(
       `
       DELETE ur FROM usuarios_roles ur
@@ -57,7 +54,6 @@ router.post("/moderadores", async (req: Request, res: Response) => {
       [usuarioId]
     );
 
-    // 2) Asignar rol de MODERADOR
     await pool.query(
       `
       INSERT IGNORE INTO usuarios_roles (usuarioId, rolId)
@@ -76,16 +72,11 @@ router.post("/moderadores", async (req: Request, res: Response) => {
   }
 });
 
-
-/* ===========================================================
-   🔴 3. ELIMINAR ROL DE MODERADOR
-=========================================================== */
-
-router.delete("/moderadores/:id", async (req: Request, res: Response) => {
+// 3. ELIMINAR ROL DE MODERADOR (SOLO ADMIN)
+router.delete("/moderadores/:id", requireAdmin, async (req: Request, res: Response) => {
   const usuarioId = req.params.id;
 
   try {
-    // 1) Quitar solo el rol de MODERADOR
     await pool.query(
       `
       DELETE ur FROM usuarios_roles ur
@@ -96,7 +87,6 @@ router.delete("/moderadores/:id", async (req: Request, res: Response) => {
       [usuarioId]
     );
 
-    // 2) Volver a asignar COMPRADOR y VENDEDOR
     await pool.query(
       `
       INSERT IGNORE INTO usuarios_roles (usuarioId, rolId)
@@ -114,11 +104,8 @@ router.delete("/moderadores/:id", async (req: Request, res: Response) => {
   }
 });
 
-
-/* ===========================================================
-   🟡 4. SUSPENDER CUENTA DE MODERADOR
-=========================================================== */
-router.post("/moderadores/:id/suspender", async (req: Request, res: Response) => {
+// 4. SUSPENDER MODERADOR (SOLO ADMIN)
+router.post("/moderadores/:id/suspender", requireAdmin, async (req: Request, res: Response) => {
   const { motivo } = req.body;
   const usuarioId = req.params.id;
 
@@ -141,10 +128,8 @@ router.post("/moderadores/:id/suspender", async (req: Request, res: Response) =>
   }
 });
 
-/* ===========================================================
-   🟢 5. REACTIVAR CUENTA DE MODERADOR
-=========================================================== */
-router.post("/moderadores/:id/reactivar", async (req: Request, res: Response) => {
+// 5. REACTIVAR MODERADOR (SOLO ADMIN)
+router.post("/moderadores/:id/reactivar", requireAdmin, async (req: Request, res: Response) => {
   const usuarioId = req.params.id;
 
   try {
@@ -166,12 +151,9 @@ router.post("/moderadores/:id/reactivar", async (req: Request, res: Response) =>
   }
 });
 
-/* ===========================================================
-   🟦 6. ASUMIR FUNCIONES DE MODERADOR (PARA ADMIN)
-=========================================================== */
-router.post("/asumir-moderador", async (req: Request, res: Response) => {
-
-  const adminId = req.user!.id; // ← YA NO ERROR
+// 6. ASUMIR ROL DE MODERADOR (SOLO ADMIN)
+router.post("/asumir-moderador", requireAdmin, async (req: Request, res: Response) => {
+  const adminId = req.user!.id;
 
   try {
     await pool.query(
@@ -187,11 +169,8 @@ router.post("/asumir-moderador", async (req: Request, res: Response) => {
   }
 });
 
-
-/* ===========================================================
-   ⚙️ 7. CONFIGURAR TIEMPO MÁXIMO DE PUBLICACIÓN
-=========================================================== */
-router.post("/config/tiempo-publicacion", async (req: Request, res: Response) => {
+// 7. CONFIGURACIÓN GLOBAL (SOLO ADMIN)
+router.post("/config/tiempo-publicacion", requireAdmin, async (req: Request, res: Response) => {
   const { dias } = req.body;
 
   if (!dias || dias < 1) {
@@ -211,11 +190,8 @@ router.post("/config/tiempo-publicacion", async (req: Request, res: Response) =>
   }
 });
 
-/* ===========================================================
-   🆕 8. 🔹 SOLO usuarios que NO son moderadores NI administradores
-=========================================================== */
-
-router.get("/usuarios-disponibles", async (req: Request, res: Response) => {
+// 8. USUARIOS DISPONIBLES PARA MODERADOR (SOLO ADMIN)
+router.get("/usuarios-disponibles", requireAdmin, async (req: Request, res: Response) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
@@ -244,14 +220,89 @@ router.get("/usuarios-disponibles", async (req: Request, res: Response) => {
   }
 });
 
-
-
-
-
 /* ===========================================================
-   📗 PUBLICACIONES PARA CONFIGURAR TIEMPO (CON EXPIRACIÓN)
+   🟢 RUTAS PARA MODERADORES Y ADMINISTRADORES
 =========================================================== */
-router.get("/publicaciones-configuracion", async (req: Request, res: Response) => {
+
+// 9. LISTAR COMPRADORES Y VENDEDORES (MODERADORES + ADMIN)
+router.get("/usuarios-clientes", requireModeratorOrAdmin, async (req: Request, res: Response) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT 
+        u.id,
+        u.nombre,
+        u.apellido,
+        u.correo,
+        u.telefono,
+        u.direccion,
+        u.estadoCuenta,
+        u.cuentaVerificada,
+        u.fechaCreacion,
+        GROUP_CONCAT(r.nombre) AS roles
+      FROM usuarios u
+      JOIN usuarios_roles ur ON ur.usuarioId = u.id
+      JOIN roles r ON r.id = ur.rolId
+      WHERE r.nombre IN ('COMPRADOR', 'VENDEDOR')
+      GROUP BY u.id
+      ORDER BY u.id DESC
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error al obtener usuarios clientes:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+// 10. SUSPENDER USUARIO (MODERADORES + ADMIN)
+router.post("/usuarios/:id/suspender", requireModeratorOrAdmin, async (req: Request, res: Response) => {
+  const usuarioId = req.params.id;
+  const { motivo } = req.body;
+
+  try {
+    await pool.query(
+      `UPDATE usuarios SET estadoCuenta = 'SUSPENDIDO' WHERE id = ?`,
+      [usuarioId]
+    );
+
+    await pool.query(
+      `INSERT INTO suspensiones (usuarioId, motivo, activa)
+       VALUES (?, ?, 1)`,
+      [usuarioId, motivo || "Suspensión administrativa"]
+    );
+
+    res.json({ message: "Usuario suspendido correctamente" });
+  } catch (error) {
+    console.error("Error al suspender usuario:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+// 11. REACTIVAR USUARIO (MODERADORES + ADMIN)
+router.post("/usuarios/:id/reactivar", requireModeratorOrAdmin, async (req: Request, res: Response) => {
+  const usuarioId = req.params.id;
+
+  try {
+    await pool.query(
+      `UPDATE usuarios SET estadoCuenta = 'ACTIVO' WHERE id = ?`,
+      [usuarioId]
+    );
+
+    await pool.query(
+      `UPDATE suspensiones SET activa = 0, fechaFin = NOW()
+       WHERE usuarioId = ? AND activa = 1`,
+      [usuarioId]
+    );
+
+    res.json({ message: "Usuario reactivado correctamente" });
+  } catch (error) {
+    console.error("Error al reactivar usuario:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+// 12. PUBLICACIONES PARA CONFIGURACIÓN (MODERADORES + ADMIN)
+router.get("/publicaciones-configuracion", requireModeratorOrAdmin, async (req: Request, res: Response) => {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(`
       SELECT 
@@ -265,7 +316,6 @@ router.get("/publicaciones-configuracion", async (req: Request, res: Response) =
 
         fp.urlFoto AS urlFoto,
 
-        -- Tiempo global (en segundos)
         (
           SELECT valor
           FROM config
@@ -273,7 +323,6 @@ router.get("/publicaciones-configuracion", async (req: Request, res: Response) =
           LIMIT 1
         ) AS tiempoGlobal,
 
-        -- Tiempo individual (en segundos)
         (
           SELECT valor
           FROM config
@@ -282,7 +331,6 @@ router.get("/publicaciones-configuracion", async (req: Request, res: Response) =
           LIMIT 1
         ) AS tiempoPublicacion,
 
-        -- Segundos transcurridos
         TIMESTAMPDIFF(SECOND, p.fechaPublicacion, NOW()) AS segundosTranscurridos
 
       FROM publicaciones p
@@ -295,7 +343,6 @@ router.get("/publicaciones-configuracion", async (req: Request, res: Response) =
     `);
 
     const publicaciones = rows.map((p) => {
-
       const tiempo = p.tiempoPublicacion || p.tiempoGlobal || null;
 
       let expirado = false;
@@ -321,11 +368,8 @@ router.get("/publicaciones-configuracion", async (req: Request, res: Response) =
   }
 });
 
-
-/* ===========================================================
-   🔧 ACTUALIZAR TIEMPO PARA UNA PUBLICACIÓN (EN SEGUNDOS)
-=========================================================== */
-router.post("/publicaciones/:id/tiempo-publicacion", async (req: Request, res: Response) => {
+// 13. ACTUALIZAR TIEMPO DE PUBLICACIÓN (MODERADORES + ADMIN)
+router.post("/publicaciones/:id/tiempo-publicacion", requireModeratorOrAdmin, async (req: Request, res: Response) => {
   const { id } = req.params;
   const { cantidad, unidad } = req.body;
 
@@ -368,92 +412,8 @@ router.post("/publicaciones/:id/tiempo-publicacion", async (req: Request, res: R
   }
 });
 
-
-
-/* ===========================================================
-   🟦 9. LISTAR COMPRADORES Y VENDEDORES
-=========================================================== */
-router.get("/usuarios-clientes", async (req: Request, res: Response) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT 
-        u.id,
-        u.nombre,
-        u.apellido,
-        u.correo,
-        u.telefono,
-        u.direccion,
-        u.estadoCuenta,
-        u.cuentaVerificada,
-        u.fechaCreacion,
-        GROUP_CONCAT(r.nombre) AS roles
-      FROM usuarios u
-      JOIN usuarios_roles ur ON ur.usuarioId = u.id
-      JOIN roles r ON r.id = ur.rolId
-      WHERE r.nombre IN ('COMPRADOR', 'VENDEDOR')
-      GROUP BY u.id
-      ORDER BY u.id DESC
-    `);
-
-    res.json(rows);
-  } catch (error) {
-    console.error("Error al obtener usuarios clientes:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
-});
-
-/* ===========================================================
-   🟥 10. SUSPENDER USUARIO (COMPRADOR O VENDEDOR)
-=========================================================== */
-router.post("/usuarios/:id/suspender", async (req: Request, res: Response) => {
-  const usuarioId = req.params.id;
-  const { motivo } = req.body;
-
-  try {
-    await pool.query(
-      `UPDATE usuarios SET estadoCuenta = 'SUSPENDIDO' WHERE id = ?`,
-      [usuarioId]
-    );
-
-    await pool.query(
-      `INSERT INTO suspensiones (usuarioId, motivo, activa)
-       VALUES (?, ?, 1)`,
-      [usuarioId, motivo || "Suspensión administrativa"]
-    );
-
-    res.json({ message: "Usuario suspendido correctamente" });
-  } catch (error) {
-    console.error("Error al suspender usuario:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
-});
-
-/* ===========================================================
-   🟩 11. REACTIVAR USUARIO (COMPRADOR O VENDEDOR)
-=========================================================== */
-router.post("/usuarios/:id/reactivar", async (req: Request, res: Response) => {
-  const usuarioId = req.params.id;
-
-  try {
-    await pool.query(
-      `UPDATE usuarios SET estadoCuenta = 'ACTIVO' WHERE id = ?`,
-      [usuarioId]
-    );
-
-    await pool.query(
-      `UPDATE suspensiones SET activa = 0, fechaFin = NOW()
-       WHERE usuarioId = ? AND activa = 1`,
-      [usuarioId]
-    );
-
-    res.json({ message: "Usuario reactivado correctamente" });
-  } catch (error) {
-    console.error("Error al reactivar usuario:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
-});
-
-router.post("/dar-baja/:id", async (req: Request, res: Response) => {
+// 14. DAR DE BAJA PUBLICACIÓN (MODERADORES + ADMIN)
+router.post("/dar-baja/:id", requireModeratorOrAdmin, async (req: Request, res: Response) => {
   const { id } = req.params;
   const { motivo } = req.body;
 
@@ -494,72 +454,8 @@ router.post("/dar-baja/:id", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/apelaciones", async (req, res) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT a.*, 
-             u.nombre AS usuarioNombre,
-             u.apellido AS usuarioApellido,
-             p.nombre AS publicacionNombre,
-             p.estado AS estadoPublicacion
-      FROM apelaciones_publicacion a
-      JOIN usuarios u ON u.id = a.usuarioId
-      JOIN publicaciones p ON p.id = a.publicacionId
-      ORDER BY a.fechaCreacion DESC
-    `);
-
-    res.json(rows);
-  } catch (error) {
-    console.error("Error obteniendo apelaciones:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
-});
-
-
-router.post("/apelaciones/:id/aprobar", async (req, res) => {
-  const adminId = req.user!.id;
-  const { id } = req.params;
-
-  try {
-    // 1. Obtener apelación
-    const [rows]: any = await pool.query(
-      `SELECT * FROM apelaciones_publicacion WHERE id = ?`,
-      [id]
-    );
-
-    const apelacion = rows[0];
-
-    if (!apelacion) {
-      return res.status(404).json({ message: "Apelación no encontrada" });
-    }
-
-    // 2. Restaurar publicación
-    await pool.query(
-      `UPDATE publicaciones 
-       SET estado = 'PUBLICADA', razonRechazo = NULL
-       WHERE id = ?`,
-      [apelacion.publicacionId]
-    );
-
-    // 3. Actualizar estado de la apelación
-    await pool.query(
-      `UPDATE apelaciones_publicacion
-       SET estado = 'APROBADA',
-           revisadoPor = ?,
-           fechaRevision = NOW()
-       WHERE id = ?`,
-      [adminId, id]
-    );
-
-    res.json({ message: "Apelación aprobada correctamente." });
-
-  } catch (error) {
-    console.error("Error aprobando apelación:", error);
-    res.status(500).json({ message: "Error del servidor" });
-  }
-});
-
-router.get("/publicaciones", async (req, res) => {
+// 15. LISTAR PUBLICACIONES (MODERADORES + ADMIN)
+router.get("/publicaciones", requireModeratorOrAdmin, async (req, res) => {
   try {
     const [rows] = await pool.query(`
       SELECT 
@@ -587,8 +483,101 @@ router.get("/publicaciones", async (req, res) => {
   }
 });
 
-router.post("/apelaciones/:id/rechazar", async (req, res) => {
-  const adminId = req.user!.id;
+// 16. REACTIVAR PUBLICACIÓN (MODERADORES + ADMIN)
+router.post("/publicaciones/:id/reactivar", requireModeratorOrAdmin, async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  try {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      "SELECT id, estado FROM publicaciones WHERE id = ? LIMIT 1",
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Publicación no encontrada" });
+    }
+
+    await pool.query(
+      "UPDATE publicaciones SET estado = 'PUBLICADA' WHERE id = ?",
+      [id]
+    );
+
+    res.json({
+      message: "Publicación reactivada exitosamente",
+      publicacionId: id
+    });
+  } catch (error) {
+    console.error("Error al reactivar publicación:", error);
+    res.status(500).json({ message: "Error interno del servidor" });
+  }
+});
+
+// 17. LISTAR APELACIONES (MODERADORES + ADMIN)
+router.get("/apelaciones", requireModeratorOrAdmin, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT a.*, 
+             u.nombre AS usuarioNombre,
+             u.apellido AS usuarioApellido,
+             p.nombre AS publicacionNombre,
+             p.estado AS estadoPublicacion
+      FROM apelaciones_publicacion a
+      JOIN usuarios u ON u.id = a.usuarioId
+      JOIN publicaciones p ON p.id = a.publicacionId
+      ORDER BY a.fechaCreacion DESC
+    `);
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Error obteniendo apelaciones:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+// 18. APROBAR APELACIÓN (MODERADORES + ADMIN)
+router.post("/apelaciones/:id/aprobar", requireModeratorOrAdmin, async (req, res) => {
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    const [rows]: any = await pool.query(
+      `SELECT * FROM apelaciones_publicacion WHERE id = ?`,
+      [id]
+    );
+
+    const apelacion = rows[0];
+
+    if (!apelacion) {
+      return res.status(404).json({ message: "Apelación no encontrada" });
+    }
+
+    await pool.query(
+      `UPDATE publicaciones 
+       SET estado = 'PUBLICADA', razonRechazo = NULL
+       WHERE id = ?`,
+      [apelacion.publicacionId]
+    );
+
+    await pool.query(
+      `UPDATE apelaciones_publicacion
+       SET estado = 'APROBADA',
+           revisadoPor = ?,
+           fechaRevision = NOW()
+       WHERE id = ?`,
+      [userId, id]
+    );
+
+    res.json({ message: "Apelación aprobada correctamente." });
+
+  } catch (error) {
+    console.error("Error aprobando apelación:", error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+
+// 19. RECHAZAR APELACIÓN (MODERADORES + ADMIN)
+router.post("/apelaciones/:id/rechazar", requireModeratorOrAdmin, async (req, res) => {
+  const userId = req.user!.id;
   const { id } = req.params;
 
   try {
@@ -596,7 +585,7 @@ router.post("/apelaciones/:id/rechazar", async (req, res) => {
       UPDATE apelaciones_publicacion
       SET estado = 'RECHAZADA', revisadoPor = ?, fechaRevision = NOW()
       WHERE id = ?
-    `, [adminId, id]);
+    `, [userId, id]);
 
     res.json({ message: "Apelación rechazada correctamente." });
   } catch (error) {
@@ -605,13 +594,12 @@ router.post("/apelaciones/:id/rechazar", async (req, res) => {
   }
 });
 
-
-
 export default router;
 
+// Helper function
 function convertirATiempoMs(valor: string): number {
   const cantidad = parseInt(valor);
-  const unidad = valor.replace(String(cantidad), ""); // s, m, h, d
+  const unidad = valor.replace(String(cantidad), "");
 
   const multipliers: any = {
     s: 1000,
@@ -623,10 +611,9 @@ function convertirATiempoMs(valor: string): number {
   return cantidad * multipliers[unidad];
 }
 
-
+// CRON Job
 import cron from "node-cron";
 
-// 🔥 CADA 1 MINUTO revisa expiraciones
 cron.schedule("* * * * *", async () => {
   console.log("⏳ Revisando publicaciones expiradas...");
 
@@ -648,7 +635,7 @@ cron.schedule("* * * * *", async () => {
     for (const pub of rows) {
       if (!pub.tiempo) continue;
 
-      const tiempoMs = convertirATiempoMs(pub.tiempo); // ejemplo: 5h → 5 * 3600000
+      const tiempoMs = convertirATiempoMs(pub.tiempo);
 
       const fechaPublicacion = new Date(pub.fechaPublicacion).getTime();
       const ahora = Date.now();
@@ -666,9 +653,3 @@ cron.schedule("* * * * *", async () => {
     console.error("Error revisando expiraciones:", error);
   }
 });
-
-
-
-
-
-

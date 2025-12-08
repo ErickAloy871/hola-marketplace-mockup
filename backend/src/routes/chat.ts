@@ -4,10 +4,13 @@ import { verifyToken } from "../middleware/roleMiddleware.js";
 import { io } from "../index.js";
 import type { RowDataPacket, ResultSetHeader } from "mysql2";
 
+
 const router = Router();
+
 
 // Todas las rutas requieren usuario autenticado
 router.use(verifyToken);
+
 
 interface ConversacionRow extends RowDataPacket {
   id: number;
@@ -25,6 +28,7 @@ interface ConversacionRow extends RowDataPacket {
   publicacionNombre: string | null;
 }
 
+
 interface MensajeRow extends RowDataPacket {
   id: number;
   conversacionId: number;
@@ -36,6 +40,7 @@ interface MensajeRow extends RowDataPacket {
   remitenteApellido: string;
 }
 
+
 interface UsuarioRow extends RowDataPacket {
   id: number;
   nombre: string;
@@ -43,25 +48,36 @@ interface UsuarioRow extends RowDataPacket {
   correo: string;
 }
 
-// 🔹 Buscar usuarios por nombre/apellido/correo
+
+// 🔹 Buscar usuarios por nombre/apellido/correo (SOLO compradores/vendedores)
 router.get("/usuarios", async (req: Request, res: Response) => {
   try {
     const q = String(req.query.q || "").trim();
     const usuarioActualId = parseInt(req.user!.id);
 
+
     if (!q) {
       return res.json([]);
     }
 
+
+    // ✅ Buscar usuarios que NO sean ADMINISTRADOR ni MODERADOR
     const [usuarios] = await pool.query<UsuarioRow[]>(
-      `SELECT id, nombre, apellido, correo
-       FROM usuarios
-       WHERE (nombre LIKE ? OR apellido LIKE ? OR correo LIKE ?)
-         AND id != ?
-       ORDER BY nombre ASC
+      `SELECT DISTINCT u.id, u.nombre, u.apellido, u.correo
+       FROM usuarios u
+       WHERE (u.nombre LIKE ? OR u.apellido LIKE ? OR u.correo LIKE ?)
+         AND u.id != ?
+         AND NOT EXISTS (
+           SELECT 1 FROM usuarios_roles ur
+           JOIN roles r ON ur.rolId = r.id
+           WHERE ur.usuarioId = u.id
+             AND r.nombre IN ('ADMINISTRADOR', 'MODERADOR')
+         )
+       ORDER BY u.nombre ASC
        LIMIT 20`,
       [`%${q}%`, `%${q}%`, `%${q}%`, usuarioActualId]
     );
+
 
     return res.json(usuarios);
   } catch (error) {
@@ -70,10 +86,12 @@ router.get("/usuarios", async (req: Request, res: Response) => {
   }
 });
 
+
 // 🔹 Obtener todas las conversaciones del usuario actual
 router.get("/conversaciones", async (req: Request, res: Response) => {
   try {
     const usuarioId = parseInt(req.user!.id);
+
 
     const [conversaciones] = await pool.query<ConversacionRow[]>(
       `SELECT 
@@ -104,10 +122,12 @@ router.get("/conversaciones", async (req: Request, res: Response) => {
       [usuarioId, usuarioId, usuarioId, usuarioId, usuarioId, usuarioId]
     );
 
+
     const resultado = conversaciones.map((c) => {
       const noLeidos = c.usuario1Id === usuarioId
         ? c.usuario1NoLeidos
         : c.usuario2NoLeidos;
+
 
       return {
         id: c.id,
@@ -129,6 +149,7 @@ router.get("/conversaciones", async (req: Request, res: Response) => {
       };
     });
 
+
     return res.json(resultado);
   } catch (error) {
     console.error("Error al obtener conversaciones:", error);
@@ -136,7 +157,8 @@ router.get("/conversaciones", async (req: Request, res: Response) => {
   }
 });
 
-// 🔹 Crear u obtener conversación (usuario o publicación)
+
+// 🔹 Crear u obtener conversación (VALIDA que ninguno sea admin/moderador)
 router.post("/conversaciones", async (req: Request, res: Response) => {
   try {
     const usuarioActualId = parseInt(req.user!.id);
@@ -145,8 +167,10 @@ router.post("/conversaciones", async (req: Request, res: Response) => {
       publicacionId?: number;
     };
 
+
     let destinoId: number | null = null;
     let pubId: number | null = null;
+
 
     if (publicacionId) {
       const [pubs] = await pool.query<RowDataPacket[]>(
@@ -154,9 +178,11 @@ router.post("/conversaciones", async (req: Request, res: Response) => {
         [publicacionId]
       );
 
+
       if (pubs.length === 0) {
         return res.status(404).json({ message: "Publicación no encontrada" });
       }
+
 
       destinoId = pubs[0].usuarioId as number;
       pubId = publicacionId;
@@ -166,27 +192,65 @@ router.post("/conversaciones", async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Se requiere otroUsuarioId o publicacionId" });
     }
 
+
     if (destinoId === usuarioActualId) {
       return res.status(400).json({ message: "No puedes chatear contigo mismo" });
     }
+
 
     const [usuarios] = await pool.query<UsuarioRow[]>(
       "SELECT id FROM usuarios WHERE id = ?",
       [destinoId]
     );
 
+
     if (usuarios.length === 0) {
       return res.status(404).json({ message: "Usuario destino no encontrado" });
     }
 
+
+    // ✅ Verificar que ninguno de los dos sea ADMINISTRADOR o MODERADOR
+    const [rolesActual] = await pool.query<RowDataPacket[]>(
+      `SELECT r.nombre FROM usuarios_roles ur
+       JOIN roles r ON ur.rolId = r.id
+       WHERE ur.usuarioId = ?`,
+      [usuarioActualId]
+    );
+
+
+    const [rolesDestino] = await pool.query<RowDataPacket[]>(
+      `SELECT r.nombre FROM usuarios_roles ur
+       JOIN roles r ON ur.rolId = r.id
+       WHERE ur.usuarioId = ?`,
+      [destinoId]
+    );
+
+
+    const rolesActualNombres = rolesActual.map((r) => r.nombre);
+    const rolesDestinoNombres = rolesDestino.map((r) => r.nombre);
+
+
+    const esAdminOMod = (roles: string[]) =>
+      roles.includes("ADMINISTRADOR") || roles.includes("MODERADOR");
+
+
+    if (esAdminOMod(rolesActualNombres) || esAdminOMod(rolesDestinoNombres)) {
+      return res.status(403).json({
+        message: "Los administradores y moderadores no pueden usar el chat con usuarios",
+      });
+    }
+
+
     const u1 = Math.min(usuarioActualId, destinoId);
     const u2 = Math.max(usuarioActualId, destinoId);
+
 
     const [existentes] = await pool.query<ConversacionRow[]>(
       `SELECT * FROM conversaciones
        WHERE (usuario1Id = ? AND usuario2Id = ?)`,
       [u1, u2]
     );
+
 
     if (existentes.length > 0) {
       const conv = existentes[0];
@@ -199,10 +263,12 @@ router.post("/conversaciones", async (req: Request, res: Response) => {
       return res.json({ conversacionId: conv.id });
     }
 
+
     const [result] = await pool.query<ResultSetHeader>(
       "INSERT INTO conversaciones (usuario1Id, usuario2Id, publicacionId) VALUES (?, ?, ?)",
       [u1, u2, pubId]
     );
+
 
     return res.json({ conversacionId: result.insertId });
   } catch (error) {
@@ -211,20 +277,24 @@ router.post("/conversaciones", async (req: Request, res: Response) => {
   }
 });
 
+
 // 🔹 Obtener mensajes de una conversación
 router.get("/conversaciones/:id/mensajes", async (req: Request, res: Response) => {
   try {
     const usuarioId = parseInt(req.user!.id);
     const conversacionId = parseInt(req.params.id);
 
+
     const [convs] = await pool.query<ConversacionRow[]>(
       "SELECT * FROM conversaciones WHERE id = ? AND (usuario1Id = ? OR usuario2Id = ?)",
       [conversacionId, usuarioId, usuarioId]
     );
 
+
     if (convs.length === 0) {
       return res.status(403).json({ message: "No tienes acceso a esta conversación" });
     }
+
 
     const [mensajes] = await pool.query<MensajeRow[]>(
       `SELECT m.*, u.nombre AS remitenteNombre, u.apellido AS remitenteApellido
@@ -235,10 +305,12 @@ router.get("/conversaciones/:id/mensajes", async (req: Request, res: Response) =
       [conversacionId]
     );
 
+
     await pool.query(
       "UPDATE mensajes SET leido = 1 WHERE conversacionId = ? AND remitenteId != ? AND leido = 0",
       [conversacionId, usuarioId]
     );
+
 
     const conv = convs[0];
     if (conv.usuario1Id === usuarioId) {
@@ -253,12 +325,14 @@ router.get("/conversaciones/:id/mensajes", async (req: Request, res: Response) =
       );
     }
 
+
     return res.json(mensajes);
   } catch (error) {
     console.error("Error al obtener mensajes:", error);
     return res.status(500).json({ message: "Error al obtener mensajes" });
   }
 });
+
 
 // 🔹 Enviar mensaje (con emisión por Socket.IO)
 router.post("/mensajes", async (req: Request, res: Response) => {
@@ -269,26 +343,32 @@ router.post("/mensajes", async (req: Request, res: Response) => {
       contenido: string;
     };
 
+
     if (!conversacionId || !contenido?.trim()) {
       return res.status(400).json({ message: "conversacionId y contenido son requeridos" });
     }
+
 
     const [convs] = await pool.query<ConversacionRow[]>(
       "SELECT * FROM conversaciones WHERE id = ? AND (usuario1Id = ? OR usuario2Id = ?)",
       [conversacionId, usuarioId, usuarioId]
     );
 
+
     if (convs.length === 0) {
       return res.status(403).json({ message: "No tienes acceso a esta conversación" });
     }
 
+
     const conv = convs[0];
     const esUsuario1 = conv.usuario1Id === usuarioId;
+
 
     const [result] = await pool.query<ResultSetHeader>(
       "INSERT INTO mensajes (conversacionId, remitenteId, contenido) VALUES (?, ?, ?)",
       [conversacionId, usuarioId, contenido]
     );
+
 
     await pool.query(
       `UPDATE conversaciones
@@ -301,6 +381,7 @@ router.post("/mensajes", async (req: Request, res: Response) => {
       [contenido, conversacionId]
     );
 
+
     const [mensajes] = await pool.query<MensajeRow[]>(
       `SELECT m.*, u.nombre AS remitenteNombre, u.apellido AS remitenteApellido
        FROM mensajes m
@@ -309,7 +390,9 @@ router.post("/mensajes", async (req: Request, res: Response) => {
       [result.insertId]
     );
 
+
     io.to(`conv_${conversacionId}`).emit("nuevo_mensaje", mensajes[0]);
+
 
     return res.json(mensajes[0]);
   } catch (error) {
@@ -317,5 +400,6 @@ router.post("/mensajes", async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Error al enviar mensaje" });
   }
 });
+
 
 export default router;
