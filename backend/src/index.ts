@@ -24,16 +24,29 @@ app.use(
 );
 
 // CORS para APIs REST - permitir múltiples orígenes en desarrollo
-const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
+const ALLOWED_ORIGINS = [
+  'http://localhost:5173',
+  'https://auramarket-orpin.vercel.app',
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Permitir localhost y cualquier IP de red local
-      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://192.168.') || origin.startsWith('http://10.')) {
+      // Permitir sin origin (postman, curl, etc)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      
+      // Permitir localhost y redes locales
+      if (origin.startsWith('http://localhost') || 
+          origin.startsWith('http://192.168.') || 
+          origin.startsWith('http://10.') ||
+          ALLOWED_ORIGINS.includes(origin)) {
         callback(null, true);
       } else {
-        callback(null, true); // En desarrollo, permitir todo
+        callback(new Error('Not allowed by CORS'));
       }
     },
     credentials: true,
@@ -65,11 +78,20 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
     origin: (origin, callback) => {
-      // Permitir localhost y cualquier IP de red local
-      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://192.168.') || origin.startsWith('http://10.')) {
+      // Sin origin (servidor a servidor)
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+      
+      // Verificar si el origin está en la lista permitida o es localhost/red local
+      if (origin.startsWith('http://localhost') || 
+          origin.startsWith('http://192.168.') || 
+          origin.startsWith('http://10.') ||
+          ALLOWED_ORIGINS.includes(origin)) {
         callback(null, true);
       } else {
-        callback(null, true); // En desarrollo, permitir todo
+        callback(new Error('Not allowed by CORS'), false);
       }
     },
     methods: ["GET", "POST"],
