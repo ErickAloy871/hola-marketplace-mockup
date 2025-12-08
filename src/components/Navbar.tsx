@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useMessagesContext } from "@/context/MessagesContext";
 import { useEffect } from "react";
+import NotificationBell from "@/components/NotificationBell";
 
 function getDisplayRole(roles: string[]) {
   if (!roles) return "";
@@ -67,11 +68,6 @@ const Navbar = () => {
               </button>
             )}
 
-
-            <button className="text-foreground hover:text-primary transition-colors font-medium">
-              Notificaciones
-            </button>
-
             {/* Botón Mensajes SIN indicador */}
             <button
               className="text-foreground hover:text-primary transition-colors font-medium"
@@ -85,6 +81,9 @@ const Navbar = () => {
           <div className="flex items-center gap-3">
             {isAuthenticated ? (
               <>
+                {/* Notification Bell for Moderators/Admins */}
+                <NotificationBell />
+
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
                   {getDisplayRole(user.roles)}
                 </span>

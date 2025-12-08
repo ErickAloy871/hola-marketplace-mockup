@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { pool } from "../db.js";
 import type { RowDataPacket } from "mysql2";
 import { verifyToken, requireModeratorOrAdmin } from "../middleware/roleMiddleware.js";
+import { getIO } from "../lib/socketIO.js";
 
 const r = Router();
 
@@ -42,9 +43,26 @@ r.post("/", verifyToken, async (req: Request, res: Response) => {
       [publicacionId, usuarioId, categoria, motivo || null]
     );
 
+    const reporteId = (result as any).insertId;
+
+    // ✅ Emitir evento Socket.IO a moderadores
+    const [publicacion] = await pool.query<RowDataPacket[]>(
+      "SELECT nombre FROM PUBLICACIONES WHERE id = ?",
+      [publicacionId]
+    );
+
+    getIO().emit('nuevo-reporte', {
+      reporteId,
+      publicacionId,
+      publicacionNombre: publicacion[0]?.nombre || 'Publicación',
+      categoria
+    });
+
+    console.log(`Notificacion emitida: nuevo reporte #${reporteId}`);
+
     res.status(201).json({
       message: "Reporte enviado exitosamente",
-      reporteId: (result as any).insertId
+      reporteId
     });
   } catch (error) {
     console.error("Error creando reporte:", error);
@@ -94,6 +112,10 @@ r.post("/:id/revisar", verifyToken, requireModeratorOrAdmin, async (req: Request
        WHERE id = ?`,
       [usuarioId, id]
     );
+
+    // ✅ Emitir evento para cerrar notificación en todos los moderadores
+    getIO().emit('reporte-revisado', { reporteId: Number(id) });
+    console.log(`Notificacion cerrada: reporte #${id} revisado`);
 
     res.json({ message: "Reporte marcado como revisado" });
   } catch (error) {

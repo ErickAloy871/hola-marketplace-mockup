@@ -23,12 +23,19 @@ app.use(
   })
 );
 
-// CORS para APIs REST
+// CORS para APIs REST - permitir múltiples orígenes en desarrollo
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 app.use(
   cors({
-    origin: FRONTEND_URL,
+    origin: (origin, callback) => {
+      // Permitir localhost y cualquier IP de red local
+      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://192.168.') || origin.startsWith('http://10.')) {
+        callback(null, true);
+      } else {
+        callback(null, true); // En desarrollo, permitir todo
+      }
+    },
     credentials: true,
   })
 );
@@ -57,7 +64,14 @@ const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: FRONTEND_URL,
+    origin: (origin, callback) => {
+      // Permitir localhost y cualquier IP de red local
+      if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://192.168.') || origin.startsWith('http://10.')) {
+        callback(null, true);
+      } else {
+        callback(null, true); // En desarrollo, permitir todo
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -65,6 +79,10 @@ const io = new Server(httpServer, {
 
 // Registrar handlers de sockets
 const socketUtils = registerSocketHandlers(io);
+
+// 🔧 Hacer io accesible globalmente para las rutas
+import { setIO } from "./lib/socketIO.js";
+setIO(io);
 
 // Hacer accesible socketUtils globalmente si luego queremos usar emitNuevoMensaje en rutas
 // (opcional, de momento no lo usaremos directamente)
@@ -82,4 +100,7 @@ export { io, socketUtils };
 })();
 
 const port = Number(process.env.PORT || 4000);
-httpServer.listen(port, () => console.log(`API + WS http://localhost:${port}`));
+httpServer.listen(port, '0.0.0.0', () => {
+  console.log(`API + WS http://localhost:${port}`);
+  console.log(`Network: http://192.168.0.18:${port}`); // Cambia esta IP por la tuya
+});
