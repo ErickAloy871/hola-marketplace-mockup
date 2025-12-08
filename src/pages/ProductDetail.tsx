@@ -4,8 +4,8 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ImageGallery from "@/components/ImageGallery";
 import ReportDialog from "@/components/ReportDialog";
-import { productosApi, interesesApi, chatApi } from "@/lib/api";
-import { ArrowLeft, MapPin, Tag, Heart } from "lucide-react";
+import { productosApi, interesesApi, chatApi, moderationApi } from "@/lib/api";
+import { ArrowLeft, MapPin, Tag, Heart, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -162,6 +162,34 @@ const ProductDetail = () => {
     }
   };
 
+  const handleDarDeBaja = async () => {
+    if (!product || !id) return;
+
+    const confirmar = window.confirm(
+      `¿Estás seguro de dar de baja la publicación "${product.nombre}"?\n\nEsta acción sacará el producto del marketplace.`
+    );
+
+    if (!confirmar) return;
+
+    const motivo = window.prompt("Motivo de la baja (opcional):");
+
+    try {
+      await moderationApi.darDeBaja(Number(id), motivo || undefined);
+      toast({
+        title: "Publicación dada de baja",
+        description: "El producto ha sido removido del marketplace",
+      });
+      navigate("/");
+    } catch (err: any) {
+      console.error("Error dando de baja publicación:", err);
+      toast({
+        title: "Error",
+        description: err?.response?.data?.message || "No se pudo dar de baja la publicación",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-background">
@@ -233,9 +261,8 @@ const ProductDetail = () => {
                   size="icon"
                   onClick={toggleFavorito}
                   disabled={loadingFavorito}
-                  className={`w-12 h-12 ${
-                    esFavorito ? "bg-red-500 hover:bg-red-600" : ""
-                  }`}
+                  className={`w-12 h-12 ${esFavorito ? "bg-red-500 hover:bg-red-600" : ""
+                    }`}
                 >
                   <Heart
                     className={`w-5 h-5 ${esFavorito ? "fill-white" : ""}`}
@@ -283,6 +310,18 @@ const ProductDetail = () => {
               <div className="flex justify-center">
                 <ReportDialog publicacionId={product.id} />
               </div>
+
+              {/* ✅ Botón de dar de baja para moderadores/admins */}
+              {esAdminOModerador() && (
+                <Button
+                  variant="destructive"
+                  className="w-full h-12 font-medium"
+                  onClick={handleDarDeBaja}
+                >
+                  <ShieldAlert className="w-4 h-4 mr-2" />
+                  Dar de baja publicación
+                </Button>
+              )}
             </div>
 
             <div className="bg-muted/50 border border-border rounded-lg p-4">

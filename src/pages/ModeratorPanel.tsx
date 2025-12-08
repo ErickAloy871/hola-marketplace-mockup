@@ -1237,9 +1237,11 @@ const ModeratorPanel = () => {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() =>
-                    navigate(`/product/${selectedReporte.publicacionId}`)
-                  }
+                  onClick={() => {
+                    const productId = selectedReporte.publicacionId;
+                    // ✅ Usar window.location para evitar conflicto con Portal
+                    window.location.href = `/product/${productId}`;
+                  }}
                 >
                   Ver publicación
                 </Button>

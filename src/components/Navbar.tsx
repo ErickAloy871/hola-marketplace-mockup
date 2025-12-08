@@ -43,14 +43,7 @@ const Navbar = () => {
     if (!isAuthenticated) setTotalNoLeidos(0);
   }, [isAuthenticated, setTotalNoLeidos]);
 
-  // ✅ REDIRECT AUTOMÁTICO PARA ADMIN Y MODERADORES
-  useEffect(() => {
-    if (isAuthenticated && isAdmin) {
-      navigate("/admin");   // Admin va a panel de administración
-    } else if (isAuthenticated && isModerator && !isAdmin) {
-      navigate("/moderation"); // Moderador va a panel de moderación
-    }
-  }, [isAuthenticated, isAdmin, isModerator, navigate]);
+
 
   return (
     <nav className="sticky top-0 z-50 bg-card border-b border-border shadow-sm">

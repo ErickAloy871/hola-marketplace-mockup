@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { pool } from "../db.js";
-import { verifyToken, requireModeratorOrAdmin } from "../middleware/roleMiddleware.js";
+import { verifyToken, requireModeratorOrAdmin, requireAdmin } from "../middleware/roleMiddleware.js";
 import type { RowDataPacket } from "mysql2";
 
 const router = Router();
